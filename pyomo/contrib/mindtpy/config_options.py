@@ -243,7 +243,7 @@ def _get_GDPopt_config():
         description="Threads",
         doc="Threads used by milp solver and nlp solver."
     ))
-    CONFIG.declare("baron_convexification", ConfigValue(
+    CONFIG.declare("use_baron_convexification", ConfigValue(
         default=True,
         domain=bool,
         description="use baron to provide the convex relations for nonconvex MINLPs.",

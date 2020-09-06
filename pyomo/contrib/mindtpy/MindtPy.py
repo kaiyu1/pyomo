@@ -115,7 +115,7 @@ class MindtPySolver(object):
             fbbt(model)
             config.logger.info(
                 "Use the fbbt to tighten the bounds of variables")
-        if config.use_baron:
+        if config.use_baron_convexification:
             add_baron_cuts(model)
             config.logger.info(
                 "Use the fbbt to tighten the bounds of variables")
