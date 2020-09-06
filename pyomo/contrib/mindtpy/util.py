@@ -1,4 +1,4 @@
-"""Utility functions and classes for the MindtPy solver."""
+deactivate"""Utility functions and classes for the MindtPy solver."""
 from __future__ import division
 import logging
 from math import fabs, floor, log
@@ -256,7 +256,8 @@ def add_baron_cuts(model):
             if sense == 'E':
                 model.baroncuts.add(expr == rhs)
     # change objective
-    model.obj.deactivate()
+    next(model.component_data_objects(Objective, active=True)).deactivate()
+    # model.obj.deactivate()
     coeff = cplex_model.objective.get_linear()
     if cplex_model.objective.get_sense() == 1:
         model.baron_obj = Objective(expr=sum(varid_to_var[i] * coeff[i] for i in range(
