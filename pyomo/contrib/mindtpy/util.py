@@ -1,4 +1,4 @@
-deactivate"""Utility functions and classes for the MindtPy solver."""
+"""Utility functions and classes for the MindtPy solver."""
 from __future__ import division
 import logging
 from math import fabs, floor, log
