@@ -119,6 +119,7 @@ class MindtPySolver(object):
             add_baron_cuts(model)
             config.logger.info(
                 "Use the fbbt to tighten the bounds of variables")
+            model.pprint()
 
         solve_data.original_model = model
         solve_data.working_model = model.clone()
