@@ -17,6 +17,7 @@ from pyomo.opt.results import ProblemSense
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 import time
 import os
+import cplex
 
 
 class MindtPySolveData(object):
