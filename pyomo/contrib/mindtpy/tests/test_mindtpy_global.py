@@ -113,37 +113,37 @@ class TestMindtPy(unittest.TestCase):
                           TerminationCondition.optimal)
             self.assertAlmostEqual(value(model.cost.expr), 3.5, places=2)
 
-    def test_GOA_MINLP2_simple(self):
-        """Test the global outer approximation decomposition algorithm."""
-        with SolverFactory('mindtpy') as opt:
-            model = SimpleMINLP2()
-            print('\n Solving MINLP2_simple problem with Outer Approximation')
-            results = opt.solve(model, strategy='GOA',
-                                init_strategy='initial_binary',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                obj_bound=10,
-                                add_nogood_cuts=True)
+    # def test_GOA_MINLP2_simple(self):
+    #     """Test the global outer approximation decomposition algorithm."""
+    #     with SolverFactory('mindtpy') as opt:
+    #         model = SimpleMINLP2()
+    #         print('\n Solving MINLP2_simple problem with Outer Approximation')
+    #         results = opt.solve(model, strategy='GOA',
+    #                             init_strategy='initial_binary',
+    #                             mip_solver=required_solvers[1],
+    #                             nlp_solver=required_solvers[0],
+    #                             obj_bound=10,
+    #                             add_nogood_cuts=True)
 
-            self.assertIs(results.solver.termination_condition,
-                          TerminationCondition.optimal)
-            self.assertAlmostEqual(value(model.cost.expr), 6.00976, places=2)
+    #         self.assertIs(results.solver.termination_condition,
+    #                       TerminationCondition.optimal)
+    #         self.assertAlmostEqual(value(model.cost.expr), 6.00976, places=2)
 
-    def test_GOA_MINLP3_simple(self):
-        """Test the global outer approximation decomposition algorithm."""
-        with SolverFactory('mindtpy') as opt:
-            model = SimpleMINLP3()
-            print('\n Solving MINLP3_simple problem with Outer Approximation')
-            results = opt.solve(model, strategy='GOA', init_strategy='initial_binary',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                obj_bound=10,
-                                add_nogood_cuts=True,
-                                use_mcpp=True)
+    # def test_GOA_MINLP3_simple(self):
+    #     """Test the global outer approximation decomposition algorithm."""
+    #     with SolverFactory('mindtpy') as opt:
+    #         model = SimpleMINLP3()
+    #         print('\n Solving MINLP3_simple problem with Outer Approximation')
+    #         results = opt.solve(model, strategy='GOA', init_strategy='initial_binary',
+    #                             mip_solver=required_solvers[1],
+    #                             nlp_solver=required_solvers[0],
+    #                             obj_bound=10,
+    #                             add_nogood_cuts=True,
+    #                             use_mcpp=True)
 
-            self.assertIs(results.solver.termination_condition,
-                          TerminationCondition.optimal)
-            self.assertAlmostEqual(value(model.cost.expr), -5.512, places=2)
+    #         self.assertIs(results.solver.termination_condition,
+    #                       TerminationCondition.optimal)
+    #         self.assertAlmostEqual(value(model.cost.expr), -5.512, places=2)
 
     def test_GOA_Proposal(self):
         """Test the global outer approximation decomposition algorithm."""
