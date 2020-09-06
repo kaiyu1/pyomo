@@ -5,7 +5,7 @@ from math import fabs, floor, log
 from pyomo.contrib.mindtpy.cut_generation import (add_oa_cuts,
                                                   add_nogood_cuts, add_affine_cuts)
 
-from pyomo.core import (Any, Binary, Block, Constraint, NonNegativeReals,
+from pyomo.core import (Any, Binary, Block, Constraint, NonNegativeReals, ConstraintList,
                         Objective, Reals, Suffix, Var, RangeSet, minimize, value)
 from pyomo.core.expr import differentiate
 from pyomo.core.expr import current as EXPR
