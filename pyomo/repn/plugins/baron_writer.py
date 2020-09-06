@@ -36,7 +36,7 @@ from pyomo.core.base import (SortComponents,
 from pyomo.core.base.component import ActiveComponent
 from pyomo.core.base.set_types import *
 from pyomo.core.kernel.base import ICategorizedObject
-#CLH: EXPORT suffixes "constraint_types" and "branching_priorities"
+# CLH: EXPORT suffixes "constraint_types" and "branching_priorities"
 #     pass their respective information to the .bar file
 import pyomo.core.base.suffix
 import pyomo.core.kernel.suffix
@@ -50,6 +50,8 @@ logger = logging.getLogger('pyomo.core')
 # A visitor pattern that creates a string for an expression
 # that is compatible with the BARON syntax.
 #
+
+
 class ToBaronVisitor(EXPR.ExpressionValueVisitor):
 
     def __init__(self, variables, smap):
@@ -60,29 +62,32 @@ class ToBaronVisitor(EXPR.ExpressionValueVisitor):
     def visit(self, node, values):
         """ Visit nodes that have been expanded """
         tmp = []
-        for i,val in enumerate(values):
+        for i, val in enumerate(values):
             arg = node._args_[i]
 
             if arg is None:
                 tmp.append('Undefined')                 # TODO: coverage
             else:
                 parens = False
-                if val and val[0] in '-+':
-                    parens = True
-                elif arg.__class__ in native_numeric_types:
-                    pass
-                elif arg.__class__ in nonpyomo_leaf_types:
-                    val = "'{0}'".format(val)
-                elif arg.is_expression_type():
-                    if node._precedence() < arg._precedence():
+                if hasattr(node, '_associativity'):
+                    if val and val[0] in '-+':
                         parens = True
-                    elif node._precedence() == arg._precedence():
-                        if i == 0:
-                            parens = node._associativity() != 1
-                        elif i == len(node._args_)-1:
-                            parens = node._associativity() != -1
-                        else:
+                    elif arg.__class__ in native_numeric_types:
+                        pass
+                    elif arg.__class__ in nonpyomo_leaf_types:
+                        val = "'{0}'".format(val)
+                    elif arg.is_expression_type():
+                        if node._precedence() < arg._precedence():
                             parens = True
+                        elif node._precedence() == arg._precedence():
+                            if i == 0:
+                                parens = node._associativity() != 1
+                            elif i == len(node._args_)-1:
+                                parens = node._associativity() != -1
+                            else:
+                                parens = True
+                else:
+                    parens = True
                 if parens:
                     tmp.append("({0})".format(val))
                 else:
@@ -103,7 +108,7 @@ class ToBaronVisitor(EXPR.ExpressionValueVisitor):
                 return tmp[1]
             return "{0} * {1}".format(tmp[0], tmp[1])
         elif node.__class__ is EXPR.PowExpression:
-            x,y = node.args
+            x, y = node.args
             if type(x) not in native_types and not x.is_fixed() and \
                type(y) not in native_types and not y.is_fixed():
                 # Per the BARON manual, x ^ y is allowed as long as x
@@ -116,7 +121,7 @@ class ToBaronVisitor(EXPR.ExpressionValueVisitor):
                 return "{0} ^ 0.5".format(tmp[0])
             elif node.name == 'log10':
                 return "{0} * log({1})".format(math.log10(math.e), tmp[0])
-            elif node.name in {'exp','log'}:
+            elif node.name in {'exp', 'log'}:
                 return node._to_string(tmp, None, self.smap, True)
             else:
                 raise RuntimeError(
@@ -133,8 +138,8 @@ class ToBaronVisitor(EXPR.ExpressionValueVisitor):
 
         Return True if the node is not expanded.
         """
-        #print("ISLEAF")
-        #print(node.__class__)
+        # print("ISLEAF")
+        # print(node.__class__)
         if node is None:
             return True, None
 
@@ -174,7 +179,6 @@ def expression_to_string(expr, variables, labeler=None, smap=None):
         smap.default_labeler = labeler
     visitor = ToBaronVisitor(variables, smap)
     return visitor.dfs_postorder_stack(expr)
-
 
 
 # TODO: The to_string function is handy, but the fact that
@@ -220,14 +224,14 @@ class ProblemWriter_bar(AbstractProblemWriter):
         # Check for active suffixes to export
         #
         if isinstance(model, IBlock):
-            suffix_gen = lambda b: ((suf.storage_key, suf) \
-                                    for suf in pyomo.core.kernel.suffix.\
-                                    export_suffix_generator(b,
-                                                            active=True,
-                                                            descend_into=False))
+            def suffix_gen(b): return ((suf.storage_key, suf)
+                                       for suf in pyomo.core.kernel.suffix.
+                                       export_suffix_generator(b,
+                                                               active=True,
+                                                               descend_into=False))
         else:
-            suffix_gen = lambda b: pyomo.core.base.suffix.\
-                         active_export_suffix_generator(b)
+            def suffix_gen(b): return pyomo.core.base.suffix.\
+                active_export_suffix_generator(b)
         r_o_eqns = []
         c_eqns = []
         l_eqns = []
@@ -262,7 +266,7 @@ class ProblemWriter_bar(AbstractProblemWriter):
         # EQUATIONS
         #
 
-        #Equation Declaration
+        # Equation Declaration
         n_roeqns = len(r_o_eqns)
         n_ceqns = len(c_eqns)
         n_leqns = len(l_eqns)
@@ -289,19 +293,20 @@ class ProblemWriter_bar(AbstractProblemWriter):
                 if (not constraint_data.has_lb()) and \
                    (not constraint_data.has_ub()):
                     assert not constraint_data.equality
-                    continue # non-binding, so skip
+                    continue  # non-binding, so skip
 
                 if (not _skip_trivial(constraint_data)) and \
                    (constraint_data not in non_standard_eqns):
 
                     eqns.append(constraint_data)
 
-                    con_symbol = symbol_map.createSymbol(constraint_data, c_labeler)
+                    con_symbol = symbol_map.createSymbol(
+                        constraint_data, c_labeler)
                     assert not con_symbol.startswith('.')
                     assert con_symbol != "c_e_FIX_ONE_VAR_CONST__"
 
                     symbol_map.alias(constraint_data,
-                                      alias_template % order_counter)
+                                     alias_template % order_counter)
                     output_file.write(", "+str(con_symbol))
                     order_counter += 1
 
@@ -310,11 +315,12 @@ class ProblemWriter_bar(AbstractProblemWriter):
         if n_roeqns > 0:
             output_file.write('RELAXATION_ONLY_EQUATIONS ')
             for i, constraint_data in enumerate(r_o_eqns):
-                con_symbol = symbol_map.createSymbol(constraint_data, c_labeler)
+                con_symbol = symbol_map.createSymbol(
+                    constraint_data, c_labeler)
                 assert not con_symbol.startswith('.')
                 assert con_symbol != "c_e_FIX_ONE_VAR_CONST__"
                 symbol_map.alias(constraint_data,
-                                  alias_template % order_counter)
+                                 alias_template % order_counter)
                 if i == n_roeqns-1:
                     output_file.write(str(con_symbol)+';\n\n')
                 else:
@@ -324,11 +330,12 @@ class ProblemWriter_bar(AbstractProblemWriter):
         if n_ceqns > 0:
             output_file.write('CONVEX_EQUATIONS ')
             for i, constraint_data in enumerate(c_eqns):
-                con_symbol = symbol_map.createSymbol(constraint_data, c_labeler)
+                con_symbol = symbol_map.createSymbol(
+                    constraint_data, c_labeler)
                 assert not con_symbol.startswith('.')
                 assert con_symbol != "c_e_FIX_ONE_VAR_CONST__"
                 symbol_map.alias(constraint_data,
-                                  alias_template % order_counter)
+                                 alias_template % order_counter)
                 if i == n_ceqns-1:
                     output_file.write(str(con_symbol)+';\n\n')
                 else:
@@ -338,11 +345,12 @@ class ProblemWriter_bar(AbstractProblemWriter):
         if n_leqns > 0:
             output_file.write('LOCAL_EQUATIONS ')
             for i, constraint_data in enumerate(l_eqns):
-                con_symbol = symbol_map.createSymbol(constraint_data, c_labeler)
+                con_symbol = symbol_map.createSymbol(
+                    constraint_data, c_labeler)
                 assert not con_symbol.startswith('.')
                 assert con_symbol != "c_e_FIX_ONE_VAR_CONST__"
                 symbol_map.alias(constraint_data,
-                                  alias_template % order_counter)
+                                 alias_template % order_counter)
                 if i == n_leqns-1:
                     output_file.write(str(con_symbol)+';\n\n')
                 else:
@@ -355,12 +363,12 @@ class ProblemWriter_bar(AbstractProblemWriter):
         # that whole variable names are recognized, and simple
         # variable names are not identified inside longer names.
         # Example: ' x[1] ' -> ' x3 '
-        #FIXME: 7/18/14 CLH: This may cause mistakes if spaces in
+        # FIXME: 7/18/14 CLH: This may cause mistakes if spaces in
         #                    variable names are allowed
         if isinstance(model, IBlock):
-            mutable_param_gen = lambda b: \
-                                b.components(ctype=Param,
-                                             descend_into=False)
+            def mutable_param_gen(b): return \
+                b.components(ctype=Param,
+                             descend_into=False)
         else:
             def mutable_param_gen(b):
                 for param in block.component_objects(Param):
@@ -408,16 +416,17 @@ class ProblemWriter_bar(AbstractProblemWriter):
                     pstring_to_bar_dict[param_string] = ftoa(param_data())
 
         # Equation Definition
-        output_file.write('c_e_FIX_ONE_VAR_CONST__:  ONE_VAR_CONST__  == 1;\n');
+        output_file.write('c_e_FIX_ONE_VAR_CONST__:  ONE_VAR_CONST__  == 1;\n')
         for constraint_data in itertools.chain(eqns,
                                                r_o_eqns,
                                                c_eqns,
                                                l_eqns):
 
             variables = OrderedSet()
-            #print(symbol_map.byObject.keys())
-            eqn_body = expression_to_string(constraint_data.body, variables, smap=symbol_map)
-            #print(symbol_map.byObject.keys())
+            # print(symbol_map.byObject.keys())
+            eqn_body = expression_to_string(
+                constraint_data.body, variables, smap=symbol_map)
+            # print(symbol_map.byObject.keys())
             referenced_variable_ids.update(variables)
 
             if len(variables) == 0:
@@ -425,7 +434,7 @@ class ProblemWriter_bar(AbstractProblemWriter):
                 eqn_body += " + 0 * ONE_VAR_CONST__ "
 
             # 7/29/14 CLH:
-            #FIXME: Baron doesn't handle many of the
+            # FIXME: Baron doesn't handle many of the
             #       intrinsic_functions available in pyomo. The
             #       error message given by baron is also very
             #       weak.  Either a function here to re-write
@@ -457,9 +466,9 @@ class ProblemWriter_bar(AbstractProblemWriter):
 
             # Double-sided constraint
             elif constraint_data.has_lb() and \
-                 constraint_data.has_ub():
+                    constraint_data.has_ub():
                 eqn_lhs = ftoa(constraint_data.lower) + \
-                          ' <= '
+                    ' <= '
                 eqn_rhs = ' <= ' + ftoa(constraint_data.upper)
 
             eqn_string = eqn_lhs + eqn_body + eqn_rhs + ';\n'
@@ -496,14 +505,14 @@ class ProblemWriter_bar(AbstractProblemWriter):
                     output_file.write("maximize ")
 
                 variables = OrderedSet()
-                #print(symbol_map.byObject.keys())
-                obj_string = expression_to_string(objective_data.expr, variables, smap=symbol_map)
-                #print(symbol_map.byObject.keys())
+                # print(symbol_map.byObject.keys())
+                obj_string = expression_to_string(
+                    objective_data.expr, variables, smap=symbol_map)
+                # print(symbol_map.byObject.keys())
                 referenced_variable_ids.update(variables)
 
-
         output_file.write(obj_string+";\n\n")
-        #referenced_variable_ids.update(symbol_map.byObject.keys())
+        # referenced_variable_ids.update(symbol_map.byObject.keys())
 
         return referenced_variable_ids, branching_priorities_suffixes
 
@@ -552,7 +561,7 @@ class ProblemWriter_bar(AbstractProblemWriter):
         if len(io_options):
             raise ValueError(
                 "ProblemWriter_baron_writer passed unrecognized io_options:\n\t" +
-                "\n\t".join("%s = %s" % (k,v) for k,v in iteritems(io_options)))
+                "\n\t".join("%s = %s" % (k, v) for k, v in iteritems(io_options)))
 
         if symbolic_solver_labels and (labeler is not None):
             raise ValueError("Baron problem writer: Using both the "
@@ -576,7 +585,7 @@ class ProblemWriter_bar(AbstractProblemWriter):
         if output_filename is None:
             output_filename = model.name + ".bar"
 
-        output_file=open(output_filename, "w")
+        output_file = open(output_filename, "w")
 
         # Process the options. Rely on baron to catch
         # and reset bad option values
@@ -625,19 +634,19 @@ class ProblemWriter_bar(AbstractProblemWriter):
                                                         sort=sorter,
                                                         descend_into=True))
         active_components_data_var = {}
-        #for block in all_blocks_list:
+        # for block in all_blocks_list:
         #    tmp = active_components_data_var[id(block)] = \
         #          list(obj for obj in block.component_data_objects(Var,
         #                                                           sort=sorter,
         #                                                           descend_into=False))
         #    create_symbols_func(symbol_map, tmp, labeler)
 
-            # GAH: Not sure this is necessary, and also it would break for
-            #      non-mutable indexed params so I am commenting out for now.
-            #for param_data in active_components_data(block, Param, sort=sorter):
-                #instead of checking if param_data._mutable:
-                #if not param_data.is_constant():
-                #    create_symbol_func(symbol_map, param_data, labeler)
+        # GAH: Not sure this is necessary, and also it would break for
+        #      non-mutable indexed params so I am commenting out for now.
+        # for param_data in active_components_data(block, Param, sort=sorter):
+        # instead of checking if param_data._mutable:
+        # if not param_data.is_constant():
+        #    create_symbol_func(symbol_map, param_data, labeler)
 
         #symbol_map_variable_ids = set(symbol_map.byObject.keys())
         #object_symbol_dictionary = symbol_map.byObject
@@ -735,7 +744,8 @@ class ProblemWriter_bar(AbstractProblemWriter):
 
         if len(lbounds) > 0:
             output_file.write("LOWER_BOUNDS{\n")
-            output_file.write("".join( lbounds[key] for key in sorted(lbounds.keys()) ) )
+            output_file.write("".join(lbounds[key]
+                                      for key in sorted(lbounds.keys())))
             output_file.write("}\n\n")
         lbounds = None
 
@@ -765,7 +775,8 @@ class ProblemWriter_bar(AbstractProblemWriter):
 
         if len(ubounds) > 0:
             output_file.write("UPPER_BOUNDS{\n")
-            output_file.write("".join( ubounds[key] for key in sorted(ubounds.keys()) ) )
+            output_file.write("".join(ubounds[key]
+                                      for key in sorted(ubounds.keys())))
             output_file.write("}\n\n")
         ubounds = None
 
@@ -811,10 +822,12 @@ class ProblemWriter_bar(AbstractProblemWriter):
                 tmp[var_name] = "%s: %s;\n" % (
                     var_name, ftoa(starting_point))
 
-        output_file.write("".join( tmp[key] for key in sorted(tmp.keys()) ))
+        output_file.write("".join(tmp[key] for key in sorted(tmp.keys())))
         output_file.write('}\n\n')
 
         output_file.close()
 
-        return output_filename, symbol_map
-
+        if output_filename == "root_relaxation_baron.bar":
+            return output_filename, symbol_map, referenced_variable_ids
+        else:
+            return output_filename, symbol_map

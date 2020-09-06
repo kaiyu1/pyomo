@@ -1809,6 +1809,66 @@ Components must now specify their rules explicitly using 'rule=' keywords.""" %
                 str(format))
         return filename, smap_id
 
+    def baronwrite(self,
+                   filename=None,
+                   format=None,
+                   solver_capability=None,
+                   io_options={}):
+        """
+        Write the model to a file, with a given format.
+        """
+        #
+        # Guess the format if none is specified
+        #
+        if (filename is None) and (format is None):
+            # Preserving backwards compatibility here.
+            # The function used to be defined with format='lp' by
+            # default, but this led to confusing behavior when a
+            # user did something like 'model.write("f.nl")' and
+            # expected guess_format to create an NL file.
+            format = ProblemFormat.cpxlp
+        if (filename is not None) and (format is None):
+            format = guess_format(filename)
+            if format is None:
+                raise ValueError(
+                    "Could not infer file format from file name '%s'.\n"
+                    "Either provide a name with a recognized extension "
+                    "or specify the format using the 'format' argument."
+                    % filename)
+        problem_writer = WriterFactory(format)
+        if problem_writer is None:
+            raise ValueError(
+                "Cannot write model in format '%s': no model "
+                "writer registered for that format"
+                % str(format))
+
+        if solver_capability is None:
+            def solver_capability(x): return True
+        filename, smap, referenced_variable_ids = problem_writer(self,
+                                                                 filename,
+                                                                 solver_capability,
+                                                                 io_options)
+        smap_id = id(smap)
+        if not hasattr(self, 'solutions'):
+            # This is a bit of a hack.  The write() method was moved
+            # here from PyomoModel to support the solution of arbitrary
+            # blocks in a hierarchical model.  However, we cannot import
+            # PyomoModel at the beginning of the file due to a circular
+            # import.  When we rearchitect the solution writers/solver
+            # API, we should revisit this and remove the circular
+            # dependency (we only need it here because we store the
+            # SymbolMap returned by the writer in the solutions).
+            from pyomo.core.base.PyomoModel import ModelSolutions
+            self.solutions = ModelSolutions(self)
+        self.solutions.add_symbol_map(smap)
+
+        if __debug__ and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Writing model '%s' to file '%s' with format %s",
+                self.name,
+                str(filename),
+                str(format))
+        return filename, smap, referenced_variable_ids
 
 @ModelComponentFactory.register("A component that contains one or more model components.")
 class Block(ActiveIndexedComponent):
