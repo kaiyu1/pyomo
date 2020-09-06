@@ -214,11 +214,9 @@ def add_baron_cuts(model):
     # create a map from cplex var id to pyomo var name
     varid_to_var = {}
     bar_var_indices = []
-    print(symbol_map)
     for vid in var_ids:
         name = symbol_map.byObject[vid]
         var_data = symbol_map.bySymbol[name]()
-        print(name, vid)
         varid_cplex = cplex_model.variables.get_indices(name)
         varid_to_var[varid_cplex] = var_data
 
