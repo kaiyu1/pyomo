@@ -30,7 +30,7 @@ from pyomo.contrib.gdpopt.util import (
 from pyomo.contrib.mindtpy.initialization import MindtPy_initialize_master
 from pyomo.contrib.mindtpy.iterate import MindtPy_iteration_loop
 from pyomo.contrib.mindtpy.util import (
-    MindtPySolveData, model_is_valid
+    MindtPySolveData, model_is_valid, add_baron_cuts
 )
 from pyomo.core import (
     Block, ConstraintList, NonNegativeReals, RangeSet, Set, Suffix, Var, value,
@@ -97,7 +97,7 @@ class MindtPySolver(object):
             config.use_mcpp = True
             config.integer_to_binary = True
             config.use_dual = False
-            config.use_fbbt = True
+            # config.use_fbbt = True
 
         if config.nlp_solver == "baron":
             config.use_dual = False
@@ -113,6 +113,10 @@ class MindtPySolver(object):
 
         if config.use_fbbt:
             fbbt(model)
+            config.logger.info(
+                "Use the fbbt to tighten the bounds of variables")
+        if config.use_baron:
+            add_baron_cuts(model)
             config.logger.info(
                 "Use the fbbt to tighten the bounds of variables")
 
