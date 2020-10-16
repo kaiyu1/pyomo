@@ -14,23 +14,21 @@ from pyomo.network import Port, Arc
 from pyomo.network.foqus_graph import FOQUSGraph
 from pyomo.core import Constraint, value, Objective, Var, ConcreteModel, \
     Binary, minimize, Expression
-from pyomo.core.kernel.component_set import ComponentSet
-from pyomo.core.kernel.component_map import ComponentMap
+from pyomo.common.collections import ComponentSet, ComponentMap
 from pyomo.core.expr.current import identify_variables
 from pyomo.repn import generate_standard_repn
 from pyutilib.misc import Options
 import copy, logging, time
 from six import iteritems, itervalues
 
-try:
-    import networkx as nx
-    import numpy
-    imports_available = True
-except ImportError:
-    imports_available = False
+from pyomo.common.dependencies import (
+    networkx as nx, networkx_available,
+    numpy, numpy_available,
+)
+
+imports_available = networkx_available & numpy_available
 
 logger = logging.getLogger('pyomo.network')
-
 
 class SequentialDecomposition(FOQUSGraph):
     """
@@ -148,9 +146,6 @@ class SequentialDecomposition(FOQUSGraph):
 
     def __init__(self, **kwds):
         """Pass kwds to update the options attribute after setting defaults"""
-        if not imports_available:
-            raise ImportError("This class requires numpy and networkx")
-
         self.cache = {}
         options = self.options = Options()
         # defaults
@@ -473,7 +468,9 @@ class SequentialDecomposition(FOQUSGraph):
                     evars = [(evar, None)]
                 for evar, idx in evars:
                     fixed_inputs[dest_unit].add(evar)
-                    evar.fix(value(mem[idx] if mem.is_indexed() else mem))
+                    val = value(mem[idx] if mem.is_indexed() else mem)
+                    # val are numpy.float64; coerce val back to float
+                    evar.fix(float(val))
 
         for con in eblock.component_data_objects(Constraint, active=True):
             # we expect to find equality constraints with one linear variable
@@ -504,7 +501,8 @@ class SequentialDecomposition(FOQUSGraph):
             val = (value(con.lower) - repn.constant) / repn.linear_coefs[0]
             var = repn.linear_vars[0]
             fixed_inputs[dest_unit].add(var)
-            var.fix(val)
+            # val are numpy.float64; coerce val back to float
+            var.fix(float(val))
 
     def pass_single_value(self, port, name, member, val, fixed):
         """
@@ -528,7 +526,8 @@ class SequentialDecomposition(FOQUSGraph):
                 fval = (0 - repn.constant) / repn.linear_coefs[0]
                 var = repn.linear_vars[0]
                 fixed.add(var)
-                var.fix(fval)
+                # val are numpy.float64; coerce val back to float
+                var.fix(float(fval))
             else:
                 raise RuntimeError(
                     "Member '%s' of port '%s' had more than "
@@ -537,7 +536,8 @@ class SequentialDecomposition(FOQUSGraph):
                     "to this port." % (name, port.name))
         else:
             fixed.add(member)
-            member.fix(val)
+            # val are numpy.float64; coerce val back to float
+            member.fix(float(val))
 
     def load_guesses(self, guesses, port, fixed):
         srcs = port.sources()
@@ -580,7 +580,7 @@ class SequentialDecomposition(FOQUSGraph):
                             # silently ignore vars already fixed
                             continue
                         fixed.add(evar)
-                        evar.fix(val)
+                        evar.fix(float(val))
                 if not has_evars:
                     # the only NumericValues in Pyomo that return True
                     # for is_fixed are expressions and variables
@@ -594,7 +594,7 @@ class SequentialDecomposition(FOQUSGraph):
                                 port.name))
                     else:
                         fixed.add(var)
-                        var.fix(entry)
+                        var.fix(float(entry))
 
     def load_values(self, port, default, fixed, use_guesses):
         sources = port.sources()
@@ -655,7 +655,7 @@ class SequentialDecomposition(FOQUSGraph):
                     "guess, " if use_guesses else ""))
 
         fixed.add(var)
-        var.fix(val)
+        var.fix(float(val))
 
     def combine_and_fix(self, port, name, obj, evars, fixed):
         """

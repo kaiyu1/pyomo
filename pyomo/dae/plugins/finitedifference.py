@@ -10,6 +10,7 @@
 
 import logging
 
+from pyomo.common.collections import ComponentSet
 from pyomo.core.base import Transformation, TransformationFactory
 from pyomo.core import Var, Expression, Objective
 from pyomo.dae import ContinuousSet, DerivativeVar, Integral
@@ -171,7 +172,7 @@ class Finite_Difference_Transformation(Transformation):
         tmpds = config.wrt
 
         if tmpds is not None:
-            if tmpds.type() is not ContinuousSet:
+            if tmpds.ctype is not ContinuousSet:
                 raise TypeError("The component specified using the 'wrt' "
                                 "keyword must be a continuous set")
             elif 'scheme' in tmpds.get_discretization_info():
@@ -236,7 +237,7 @@ class Finite_Difference_Transformation(Transformation):
 
         for d in block.component_objects(DerivativeVar, descend_into=True):
             dsets = d.get_continuousset_list()
-            for i in set(dsets):
+            for i in ComponentSet(dsets):
                 if currentds is None or i.name == currentds:
                     oldexpr = d.get_derivative_expression()
                     loc = d.get_state_var()._contset[i]

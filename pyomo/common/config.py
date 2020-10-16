@@ -11,6 +11,7 @@
 import os
 import platform
 
+import enum
 import six
 from pyutilib.misc.config import ConfigBlock, ConfigList, ConfigValue
 
@@ -22,6 +23,14 @@ elif platform.system().lower().startswith(('windows','cygwin')):
 else:
     PYOMO_CONFIG_DIR = os.path.abspath(
         os.path.join(os.environ.get('HOME', ''), '.pyomo'))
+
+# Note that alternative platform-independent implementation of the above
+# could be to use:
+#
+#   PYOMO_CONFIG_DIR = os.path.abspath(appdirs.user_data_dir('pyomo'))
+#
+# But would require re-adding the hard dependency on appdirs.  For now
+# (13 Jul 20), the above appears to be sufficiently robust.
 
 USER_OPTION = 0
 ADVANCED_OPTION = 1
@@ -157,3 +166,13 @@ def add_docstring_list(docstring, configblock, indent_by=4):
             indent_spacing=0,
             width=256
         ).splitlines(True))
+
+
+class ConfigEnum(enum.Enum):
+    @classmethod
+    def from_enum_or_string(cls, arg):
+        if type(arg) is str:
+            return cls[arg]
+        else:
+            # Handles enum or integer inputs
+            return cls(arg)

@@ -132,12 +132,7 @@ class StochSolver:
                 tree_maker = getattr(m, treecbname)
 
                 tree = tree_maker()
-                if isinstance(tree, Pyo.ConcreteModel):
-                    tree_model = tree
-                else:
-                    raise RuntimeError("The tree returned by",treecbname,
-                                       "must be a ConcreteModel") 
-                    
+
                 scenario_instance_factory = ScenarioTreeInstanceFactory(scen_function, tree_model)
 
             else: 
@@ -209,7 +204,7 @@ class StochSolver:
 
                 solve_result is the solver return value.
 
-                absgap is the absolute optimality gap (might not be valid); only if requested      
+                absgap is the absolute optimality gap (might not be valid); only if requested
 
         Note:
            Also update the scenario tree, populated with the solution.

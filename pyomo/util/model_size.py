@@ -1,9 +1,9 @@
 """This module contains functions to interrogate the size of a Pyomo model."""
 import logging
 
+from pyomo.common.collections import ComponentSet
 from pyomo.core import Block, Constraint, Var
 from pyomo.core.expr import current as EXPR
-from pyomo.core.kernel.component_set import ComponentSet
 from pyomo.gdp import Disjunct, Disjunction
 from pyutilib.misc import Container
 
@@ -82,7 +82,7 @@ def build_model_size_report(model):
     report.activated.binary_variables = sum(
         1 for v in activated_vars if v.is_binary())
     report.activated.integer_variables = sum(
-        1 for v in activated_vars if v.is_integer())
+        1 for v in activated_vars if v.is_integer() and not v.is_binary())
     report.activated.continuous_variables = sum(
         1 for v in activated_vars if v.is_continuous())
     report.activated.disjunctions = len(activated_disjunctions)
@@ -99,7 +99,7 @@ def build_model_size_report(model):
     report.overall.variables = len(all_vars)
     report.overall.binary_variables = sum(1 for v in all_vars if v.is_binary())
     report.overall.integer_variables = sum(
-        1 for v in all_vars if v.is_integer())
+        1 for v in all_vars if v.is_integer() and not v.is_binary())
     report.overall.continuous_variables = sum(
         1 for v in all_vars if v.is_continuous())
     report.overall.disjunctions = sum(

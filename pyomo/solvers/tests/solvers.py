@@ -37,6 +37,14 @@ _test_solver_cases = {}
 def initialize(**kwds):
     obj = Options(**kwds)
     #
+    # Set the limits for the solver's "demo" (unlicensed) mode:
+    #   ( nVars, nCons, nNonZeros )
+    obj.demo_limits = (None, None, None)
+    if (obj.name == "baron") and \
+       (not BARONSHELL.license_is_valid()):
+        obj.demo_limits = (10, 10, 50)
+    #
+    #
     # Set obj.available
     #
     opt = None
@@ -48,9 +56,6 @@ def initialize(**kwds):
         obj.available = False
     elif (obj.name == "gurobi") and \
        (not GUROBISHELL.license_is_valid()):
-        obj.available = False
-    elif (obj.name == "baron") and \
-       (not BARONSHELL.license_is_valid()):
         obj.available = False
     elif (obj.name == "mosek") and \
        (not MosekDirect.license_is_valid()):
@@ -81,6 +86,7 @@ def test_solver_cases(*args):
     """
     if len(_test_solver_cases) == 0:
         logging.disable(logging.WARNING)
+
 
         #
         # MOSEK
@@ -298,19 +304,40 @@ def test_solver_cases(*args):
             name='xpress',
             io='lp',
             capabilities=_xpress_capabilities,
-            import_suffixes=['dual','rc','slack'])
+            import_suffixes=['dual','rc','slack'],
+            options={'bargapstop':1e-9,})
 
         _test_solver_cases['xpress', 'mps'] = initialize(
             name='xpress',
             io='mps',
             capabilities=_xpress_capabilities,
-            import_suffixes=['dual','rc','slack'])
+            import_suffixes=['dual','rc','slack'],
+            options={'bargapstop':1e-9,})
 
         _test_solver_cases['xpress', 'nl'] = initialize(
             name='xpress',
             io='nl',
             capabilities=_xpress_capabilities,
-            import_suffixes=['dual'])
+            import_suffixes=['dual'],
+            options={'bargapstop':1e-9,})
+
+        _test_solver_cases['xpress', 'python'] = initialize(
+            name='xpress',
+            io='python',
+            capabilities=_xpress_capabilities,
+            import_suffixes=['dual','rc','slack'],
+            options={'bargapstop':1e-9,})
+
+        #
+        # XPRESS PERSISTENT 
+        #
+
+        _test_solver_cases['xpress_persistent', 'python'] = initialize(
+            name='xpress_persistent',
+            io='python',
+            capabilities=_xpress_capabilities,
+            import_suffixes=['slack', 'dual', 'rc'],
+            options={'bargapstop':1e-9,})
 
         #
         # IPOPT

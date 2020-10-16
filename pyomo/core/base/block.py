@@ -31,14 +31,14 @@ else:
 
 from pyutilib.misc.indent_io import StreamIndenter
 
+from pyomo.common.collections import ComponentMap
 from pyomo.common.timing import ConstructionTimer
 from pyomo.core.base.plugin import *  # ModelComponentFactory
 from pyomo.core.base.component import Component, ActiveComponentData, \
     ComponentUID
-from pyomo.core.base.sets import Set,  _SetDataBase
+from pyomo.core.base.set import Set, RangeSet, GlobalSetBase, _SetDataBase
 from pyomo.core.base.var import Var
 from pyomo.core.base.misc import apply_indexed_rule
-from pyomo.core.base.suffix import ComponentMap
 from pyomo.core.base.indexed_component import IndexedComponent, \
     ActiveIndexedComponent, UnindexedComponent_set
 
@@ -46,41 +46,6 @@ from pyomo.opt.base import ProblemFormat, guess_format
 from pyomo.opt import WriterFactory
 
 logger = logging.getLogger('pyomo.core')
-
-
-# Monkey-patch for deepcopying weakrefs
-# Only required on Python <= 2.6
-#
-# TODO: can we verify that this is really needed? [JDS 7/8/14]
-if sys.version_info[0] == 2 and sys.version_info[1] <= 6:
-    copy._copy_dispatch[weakref.ref] = copy._copy_immutable
-    copy._deepcopy_dispatch[weakref.ref] = copy._deepcopy_atomic
-    copy._deepcopy_dispatch[weakref.KeyedRef] = copy._deepcopy_atomic
-
-    def dcwvd(self, memo):
-        """Deepcopy implementation for WeakValueDictionary class"""
-        from copy import deepcopy
-        new = self.__class__()
-        for key, wr in self.data.items():
-            o = wr()
-            if o is not None:
-                new[deepcopy(key, memo)] = o
-        return new
-    weakref.WeakValueDictionary.__copy__ = \
-        weakref.WeakValueDictionary.copy
-    weakref.WeakValueDictionary.__deepcopy__ = dcwvd
-
-    def dcwkd(self, memo):
-        """Deepcopy implementation for WeakKeyDictionary class"""
-        from copy import deepcopy
-        new = self.__class__()
-        for key, value in self.data.items():
-            o = key()
-            if o is not none:
-                new[o] = deepcopy(value, memo)
-        return new
-    weakref.WeakKeyDictionary.__copy__ = weakref.WeakKeyDictionary.copy
-    weakref.WeakKeyDictionary.__deepcopy__ = dcwkd
 
 
 class _generic_component_decorator(object):
@@ -299,7 +264,7 @@ class PseudoMap(object):
         """
         if key in self._block._decl:
             x = self._block._decl_order[self._block._decl[key]]
-            if self._ctypes is None or x[0].type() in self._ctypes:
+            if self._ctypes is None or x[0].ctype in self._ctypes:
                 if self._active is None or x[0].active == self._active:
                     return x[0]
         msg = ""
@@ -367,7 +332,7 @@ class PseudoMap(object):
         # component matches those flags
         if key in self._block._decl:
             x = self._block._decl_order[self._block._decl[key]]
-            if self._ctypes is None or x[0].type() in self._ctypes:
+            if self._ctypes is None or x[0].ctype in self._ctypes:
                 return self._active is None or x[0].active == self._active
         return False
 
@@ -821,7 +786,7 @@ class _BlockData(ActiveComponentData):
                or k in self._decl:
                 setattr(self, k, src_raw_dict[k])
 
-    def _add_temporary_set(self, val):
+    def _add_implicit_sets(self, val):
         """TODO: This method has known issues (see tickets) and needs to be
         reviewed. [JDS 9/2014]"""
 
@@ -832,40 +797,24 @@ class _BlockData(ActiveComponentData):
         #
         if _component_sets is not None:
             for ctr, tset in enumerate(_component_sets):
-                if tset.parent_component()._name == "_unknown_":
-                    self._construct_temporary_set(
-                        tset,
-                        val.local_name + "_index_" + str(ctr)
-                    )
-        if isinstance(val._index, _SetDataBase) and \
-                val._index.parent_component().local_name == "_unknown_":
-            self._construct_temporary_set(val._index, val.local_name + "_index")
-        if isinstance(getattr(val, 'initialize', None), _SetDataBase) and \
-                val.initialize.parent_component().local_name == "_unknown_":
-            self._construct_temporary_set(val.initialize, val.local_name + "_index_init")
-        if getattr(val, 'domain', None) is not None and \
-           getattr(val.domain, 'local_name', None) == "_unknown_":
-            self._construct_temporary_set(val.domain, val.local_name + "_domain")
-
-    def _construct_temporary_set(self, obj, name):
-        """TODO: This method has known issues (see tickets) and needs to be
-        reviewed. [JDS 9/2014]"""
-        if type(obj) is tuple:
-            if len(obj) == 1:  # pragma:nocover
-                raise Exception(
-                    "Unexpected temporary set construction for set "
-                    "%s on block %s" % (name, self.name))
-            else:
-                tobj = obj[0]
-                for t in obj[1:]:
-                    tobj = tobj * t
-                self.add_component(name, tobj)
-                tobj.virtual = True
-                return tobj
-        elif isinstance(obj, Set):
-            self.add_component(name, obj)
-            return obj
-        raise Exception("BOGUS")
+                if tset.parent_component().parent_block() is None \
+                        and not isinstance(tset.parent_component(), GlobalSetBase):
+                    self.add_component("%s_index_%d" % (val.local_name, ctr), tset)
+        if getattr(val, '_index', None) is not None \
+                and isinstance(val._index, _SetDataBase) \
+                and val._index.parent_component().parent_block() is None \
+                and not isinstance(val._index.parent_component(), GlobalSetBase):
+            self.add_component("%s_index" % (val.local_name,), val._index.parent_component())
+        if getattr(val, 'initialize', None) is not None \
+                and isinstance(val.initialize, _SetDataBase) \
+                and val.initialize.parent_component().parent_block() is None \
+                and not isinstance(val.initialize.parent_component(), GlobalSetBase):
+            self.add_component("%s_index_init" % (val.local_name,), val.initialize.parent_component())
+        if getattr(val, 'domain', None) is not None \
+                and isinstance(val.domain, _SetDataBase) \
+                and val.domain.parent_block() is None \
+                and not isinstance(val.domain, GlobalSetBase):
+            self.add_component("%s_domain" % (val.local_name,), val.domain)
 
     def _flag_vars_as_stale(self):
         """
@@ -976,7 +925,7 @@ class _BlockData(ActiveComponentData):
         # component type that is suppressed.
         #
         _component = self.parent_component()
-        _type = val.type()
+        _type = val.ctype
         if _type in _component._suppress_ctypes:
             return
         #
@@ -1027,8 +976,7 @@ component, use the block del_component() and add_component() methods.
         # kind of thing to an "update_parent()" method on the
         # components.
         #
-        if hasattr(val, '_index'):
-            self._add_temporary_set(val)
+        self._add_implicit_sets(val)
         #
         # Add the component to the underlying Component store
         #
@@ -1102,9 +1050,11 @@ Components must now specify their rules explicitly using 'rule=' keywords.""" %
         if getattr(_component, '_constructed', False):
             # NB: we don't have to construct the temporary / implicit
             # sets here: if necessary, that happens when
-            # _add_temporary_set() calls add_component().
-            if id(self) in _BlockConstruction.data:
-                data = _BlockConstruction.data[id(self)].get(name, None)
+            # _add_implicit_sets() calls add_component().
+            if _BlockConstruction.data:
+                data = _BlockConstruction.data.get(id(self), None)
+                if data is not None:
+                    data = data.get(name, None)
             else:
                 data = None
             if __debug__ and logger.isEnabledFor(logging.DEBUG):
@@ -1167,10 +1117,10 @@ Components must now specify their rules explicitly using 'rule=' keywords.""" %
         self._decl_order[idx] = (None, self._decl_order[idx][1])
 
         # Update the ctype linked lists
-        ctype_info = self._ctypes[obj.type()]
+        ctype_info = self._ctypes[obj.ctype]
         ctype_info[2] -= 1
         if ctype_info[2] == 0:
-            del self._ctypes[obj.type()]
+            del self._ctypes[obj.ctype]
 
         # Clear the _parent attribute
         obj._parent = None
@@ -1195,7 +1145,7 @@ Components must now specify their rules explicitly using 'rule=' keywords.""" %
         if obj is None:
             return
 
-        if obj._type is new_ctype:
+        if obj.ctype is new_ctype:
             return
 
         name = obj.local_name
@@ -1204,22 +1154,22 @@ Components must now specify their rules explicitly using 'rule=' keywords.""" %
             # easiest (and fastest) thing to do is just delete it and
             # re-add it.
             self.del_component(name)
-            obj._type = new_ctype
+            obj._ctype = new_ctype
             self.add_component(name, obj)
             return
 
         idx = self._decl[name]
 
         # Update the ctype linked lists
-        ctype_info = self._ctypes[obj.type()]
+        ctype_info = self._ctypes[obj.ctype]
         ctype_info[2] -= 1
         if ctype_info[2] == 0:
-            del self._ctypes[obj.type()]
+            del self._ctypes[obj.ctype]
         elif ctype_info[0] == idx:
             ctype_info[0] = self._decl_order[idx][1]
         else:
             prev = None
-            tmp = self._ctypes[obj.type()][0]
+            tmp = self._ctypes[obj.ctype][0]
             while tmp < idx:
                 prev = tmp
                 tmp = self._decl_order[tmp][1]
@@ -1229,7 +1179,7 @@ Components must now specify their rules explicitly using 'rule=' keywords.""" %
             if ctype_info[1] == idx:
                 ctype_info[1] = prev
 
-        obj._type = new_ctype
+        obj._ctype = new_ctype
 
         # Insert into the new ctype list
         if new_ctype not in self._ctypes:
@@ -1320,22 +1270,37 @@ Components must now specify their rules explicitly using 'rule=' keywords.""" %
         return None
 
     def component_map(self, ctype=None, active=None, sort=False):
-        """
-        Returns a PseudoMap of the components in this block.
+        """Returns a PseudoMap of the components in this block.
 
-            ctype
-                None            - All components
-                ComponentType   - A single ComponentType
-                Iterable        - Iterate to generate ComponentTypes
+        Parameters
+        ----------
+        ctype:  None or type or iterable
+            Specifies the component types (`ctypes`) to include in the
+            resulting PseudoMap
 
-            active is None, True, False
-                None  - All
-                True  - Active
-                False - Inactive
+                =============   ===================
+                None            All components
+                type            A single component type
+                iterable        All component types in the iterable
+                =============   ===================
 
-            sort is True, False
-                True - Maps to Block.alphabetizeComponentAndIndex
-                False - Maps to Block.declarationOrder
+        active: None or bool
+            Filter components by the active flag
+
+                =====  ===============================
+                None   Return all components
+                True   Return only active components
+                False  Return only inactive components
+                =====  ===============================
+
+        sort: bool
+            Iterate over the components in a sorted otder
+
+                =====  ================================================
+                True   Iterate using Block.alphabetizeComponentAndIndex
+                False  Iterate using Block.declarationOrder
+                =====  ================================================
+
         """
         return PseudoMap(self, ctype, active, sort)
 
@@ -1369,27 +1334,22 @@ Components must now specify their rules explicitly using 'rule=' keywords.""" %
         _sort_indices = SortComponents.sort_indices(sort)
         _subcomp = PseudoMap(self, ctype, active, sort)
         for name, comp in _subcomp.iteritems():
-            # _NOTE_: Suffix has a dict interface (something other
-            #         derived non-indexed Components may do as well),
-            #         so we don't want to test the existence of
-            #         iteritems as a check for components. Also,
-            #         the case where we test len(comp) after seeing
-            #         that comp.is_indexed is False is a hack for a
-            #         SimpleConstraint whose expression resolved to
-            #         Constraint.skip or Constraint.feasible (in which
-            #         case its data is empty and iteritems would have
-            #         been empty as well)
-            # try:
-            #    _items = comp.iteritems()
-            # except AttributeError:
-            #    _items = [ (None, comp) ]
+            # NOTE: Suffix has a dict interface (something other derived
+            #   non-indexed Components may do as well), so we don't want
+            #   to test the existence of iteritems as a check for
+            #   component datas. We will rely on is_indexed() to catch
+            #   all the indexed components.  Then we will do special
+            #   processing for the scalar components to catch the case
+            #   where there are "sparse scalar components"
             if comp.is_indexed():
                 _items = comp.iteritems()
-            # This is a hack (see _NOTE_ above).
-            elif len(comp) or not hasattr(comp, '_data'):
-                _items = ((None, comp),)
+            elif hasattr(comp, '_data'):
+                # This may be an empty Scalar component (e.g., from
+                # Constraint.Skip on a scalar Constraint)
+                assert len(comp._data) <= 1
+                _items = iteritems(comp._data)
             else:
-                _items = tuple()
+                _items = ((None, comp),)
 
             if _sort_indices:
                 _items = sorted(_items, key=itemgetter(0))
@@ -1562,7 +1522,7 @@ Components must now specify their rules explicitly using 'rule=' keywords.""" %
         # "descend_into" argument in public calling functions: callers
         # expect that the called thing will be iterated over.
         #
-        # if self.parent_component().type() not in ctype:
+        # if self.parent_component().ctype not in ctype:
         #    return ().__iter__()
 
         if traversal is None or \
@@ -1886,7 +1846,35 @@ class Block(ActiveIndexedComponent):
             self.construct()
 
     def _getitem_when_not_present(self, idx):
-        return self._setitem_when_not_present(idx)
+        _block = self._setitem_when_not_present(idx)
+        if self._rule is None:
+            return _block
+
+        if _BlockConstruction.data:
+            data = _BlockConstruction.data.get(id(self), None)
+            if data is not None:
+                data = data.get(idx, None)
+            if data is not None:
+                _BlockConstruction.data[id(_block)] = data
+        else:
+            data = None
+
+        try:
+            obj = apply_indexed_rule(
+                self, self._rule, _block, idx, self._options)
+        finally:
+            if data is not None:
+                del _BlockConstruction.data[id(_block)]
+
+        if obj is not _block and isinstance(obj, _BlockData):
+            # If the user returns a block, transfer over everything
+            # they defined into the empty one we created.
+            _block.transfer_attributes_from(obj)
+
+        # TBD: Should we allow skipping Blocks???
+        # if obj is Block.Skip and idx is not None:
+        #   del self._data[idx]
+        return _block
 
     def find_component(self, label_or_component):
         """
@@ -1906,55 +1894,63 @@ class Block(ActiveIndexedComponent):
         timer = ConstructionTimer(self)
         self._constructed = True
 
-        # We must check that any pre-existing components are
-        # constructed.  This catches the case where someone is building
-        # a Concrete model by building (potentially pseudo-abstract)
-        # sub-blocks and then adding them to a Concrete model block.
-        for idx in self._data:
-            _block = self[idx]
-            for name, obj in iteritems(_block.component_map()):
-                if not obj._constructed:
-                    if data is None:
-                        _data = None
-                    else:
-                        _data = data.get(name, None)
-                    obj.construct(_data)
-
-        if self._rule is None:
-            # Ensure the _data dictionary is populated for singleton
-            # blocks
-            if not self.is_indexed():
-                self[None]
+        # Constructing blocks is tricky.  Scalar blocks are already
+        # partially constructed (they have _data[None] == self) in order
+        # to support Abstract blocks.  The block may therefore already
+        # have components declared on it.  In order to preserve
+        # decl_order, we must construct those components *first* before
+        # firing any rule.  Indexed blocks should be empty, so we only
+        # need to fire the rule in order.
+        #
+        #  Since the rule does not pass any "data" on, we build a scalar
+        #  "stack" of pointers to block data (_BlockConstruction.data)
+        #  that the individual blocks' add_component() can refer back to
+        #  to handle component construction.
+        if data is not None:
+            _BlockConstruction.data[id(self)] = data
+        try:
+            if self.is_indexed():
+                # We can only populate Blocks with finite indexing sets
+                if self._rule is not None and self.index_set().isfinite():
+                    for _idx in self.index_set():
+                        # Trigger population & call the rule
+                        self._getitem_when_not_present(_idx)
+            else:
+                # We must check that any pre-existing components are
+                # constructed.  This catches the case where someone is
+                # building a Concrete model by building (potentially
+                # pseudo-abstract) sub-blocks and then adding them to a
+                # Concrete model block.
+                _idx = next(iter(UnindexedComponent_set))
+                if _idx not in self._data:
+                    # Derived block classes may not follow the scalar
+                    # Block convention of initializing _data to point to
+                    # itself (i.e., they are not set up to support
+                    # Abstract models)
+                    self._data[_idx] = self
+                _block = self
+                for name, obj in iteritems(_block.component_map()):
+                    if not obj._constructed:
+                        if data is None:
+                            _data = None
+                        else:
+                            _data = data.get(name, None)
+                        obj.construct(_data)
+                if self._rule is not None:
+                    obj = apply_indexed_rule(
+                        self, self._rule, _block, _idx, self._options)
+                    if obj is not _block and isinstance(obj, _BlockData):
+                        # If the user returns a block, transfer over
+                        # everything they defined into the empty one we
+                        # created.
+                        _block.transfer_attributes_from(obj)
+        finally:
+            # We must check if data is still in the dictionary, as
+            # scalar blocks will have already removed the entry (as
+            # the _data and the component are the same object)
+            if data is not None and id(self) in _BlockConstruction.data:
+                del _BlockConstruction.data[id(self)]
             timer.report()
-            return
-        # If we have a rule, fire the rule for all indices.
-        # Notes:
-        #  - Since this block is now concrete, any components added to
-        #    it will be immediately constructed by
-        #    block.add_component().
-        #  - Since the rule does not pass any "data" on, we build a
-        #    scalar "stack" of pointers to block data
-        #    (_BlockConstruction.data) that the individual blocks'
-        #    add_component() can refer back to to handle component
-        #    construction.
-        for idx in self._index:
-            _block = self[idx]
-            if data is not None and idx in data:
-                _BlockConstruction.data[id(_block)] = data[idx]
-            obj = apply_indexed_rule(
-                self, self._rule, _block, idx, self._options)
-            if id(_block) in _BlockConstruction.data:
-                del _BlockConstruction.data[id(_block)]
-
-            if obj is not _block and isinstance(obj, _BlockData):
-                # If the user returns a block, transfer over everything
-                # they defined into the empty one we created.
-                _block.transfer_attributes_from(obj)
-
-            # TBD: Should we allow skipping Blocks???
-            # if obj is Block.Skip and idx is not None:
-            #   del self._data[idx]
-        timer.report()
 
     def _pprint_callback(self, ostream, idx, data):
         if not self.is_indexed():
@@ -1997,6 +1993,10 @@ class SimpleBlock(_BlockData, Block):
     def __init__(self, *args, **kwds):
         _BlockData.__init__(self, component=self)
         Block.__init__(self, *args, **kwds)
+        # Initialize the data dict so that (abstract) attribute
+        # assignment will work.  Note that we do not trigger
+        # get/setitem_when_not_present so that we do not (implicitly)
+        # trigger the Block rule
         self._data[None] = self
 
     def display(self, filename=None, ostream=None, prefix=""):
@@ -2153,21 +2153,15 @@ _BlockData._Block_reserved_words = set(dir(Block()))
 
 
 class _IndexedCustomBlockMeta(type):
-    """Metaclass for creating an indexed block with
-    a custom block data type."""
+    """Metaclass for creating an indexed custom block.
+    """
 
-    def __new__(meta, name, bases, dct):
-        def __init__(self, *args, **kwargs):
-            bases[0].__init__(self, *args, **kwargs)
-
-        dct["__init__"] = __init__
-        return type.__new__(meta, name, bases, dct)
+    pass
 
 
 class _ScalarCustomBlockMeta(type):
-    '''Metaclass used to create a scalar block with a
-    custom block data type
-    '''
+    """Metaclass for creating a scalar custom block.
+    """
 
     def __new__(meta, name, bases, dct):
         def __init__(self, *args, **kwargs):
@@ -2182,9 +2176,14 @@ class _ScalarCustomBlockMeta(type):
 
 
 class CustomBlock(Block):
-    ''' This CustomBlock is the base class that allows
-    for easy creation of specialized derived blocks
-    '''
+    """ The base class used by instances of custom block components
+    """
+
+    def __init__(self, *args, **kwds):
+        if self._default_ctype is not None:
+            kwds.setdefault('ctype', self._default_ctype)
+        Block.__init__(self, *args, **kwds)
+
 
     def __new__(cls, *args, **kwds):
         if cls.__name__.startswith('_Indexed') or \
@@ -2193,37 +2192,65 @@ class CustomBlock(Block):
             # therefore, we need to create what we have
             return super(CustomBlock, cls).__new__(cls)
         if not args or (args[0] is UnindexedComponent_set and len(args) == 1):
-            bname = "_Scalar{}".format(cls.__name__)
-            n = _ScalarCustomBlockMeta(bname, (cls._ComponentDataClass, cls), {})
+            n = _ScalarCustomBlockMeta(
+                "_Scalar%s" % (cls.__name__,),
+                (cls._ComponentDataClass, cls),
+                {}
+            )
             return n.__new__(n)
         else:
-            bname = "_Indexed{}".format(cls.__name__)
-            n = _IndexedCustomBlockMeta(bname, (cls,), {})
+            n = _IndexedCustomBlockMeta(
+                "_Indexed%s" % (cls.__name__,),
+                (cls,),
+                {}
+            )
             return n.__new__(n)
 
 
-def declare_custom_block(name):
-    ''' Decorator to declare the custom component
-    that goes along with a custom block data
+def declare_custom_block(name, new_ctype=None):
+    """ Decorator to declare components for a custom block data class
 
-    @declare_custom_block(name=FooBlock)
-    class FooBlockData(_BlockData):
-       # custom block data class
-    '''
+    >>> @declare_custom_block(name=FooBlock)
+    ... class FooBlockData(_BlockData):
+    ...    # custom block data class
+    ...    pass
+    """
 
     def proc_dec(cls):
         # this is the decorator function that
         # creates the block component class
+
+        # Default (derived) Block attributes
+        clsbody = {
+            "__module__": cls.__module__,  # magic to fix the module
+            # Default IndexedComponent data object is the decorated class:
+            "_ComponentDataClass": cls,
+            # By default this new block does not declare a new ctype
+            "_default_ctype": None,
+        }
+
         c = type(
-            name,
-            # name of new class
-            (CustomBlock,),
-            # base classes
-            {"__module__": cls.__module__,
-             "_ComponentDataClass": cls})  # magic to fix the module
+            name,  # name of new class
+            (CustomBlock,),  # base classes
+            clsbody,  # class body definitions (will populate __dict__)
+        )
+
+        if new_ctype is not None:
+            if new_ctype is True:
+                c._default_ctype = c
+            elif type(new_ctype) is type:
+                c._default_ctype = new_ctype
+            else:
+                raise ValueError("Expected new_ctype to be either type "
+                                 "or 'True'; received: %s" % (new_ctype,))
+
+        # Register the new Block type in the same module as the BlockData
+        setattr(sys.modules[cls.__module__], name, c)
+        # TODO: can we also register concrete Indexed* and Scalar*
+        # classes into the original BlockData module (instead of relying
+        # on metaclasses)?
 
         # are these necessary?
-        setattr(sys.modules[cls.__module__], name, c)
         setattr(cls, '_orig_name', name)
         setattr(cls, '_orig_module', cls.__module__)
         return cls
