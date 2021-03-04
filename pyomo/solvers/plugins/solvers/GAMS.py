@@ -723,6 +723,7 @@ class GAMSShell(_GAMSSolver):
         load_solutions = options.pop("load_solutions", True)
         tee            = options.pop("tee", False)
         logfile        = options.pop("logfile", None)
+        tracefile = options.pop("tracefile", None)
         keepfiles      = options.pop("keepfiles", False)
         tmpdir         = options.pop("tmpdir", None)
         report_timing  = options.pop("report_timing", False)
@@ -813,6 +814,9 @@ class GAMSShell(_GAMSSolver):
             command.append("lo=4")
         if logfile:
             command.append("lf=" + str(logfile))
+        if tracefile:
+            command.append("trace="+str(tracefile))
+            command.append("traceopt=3")
 
         try:
             ostreams = [StringIO()]
