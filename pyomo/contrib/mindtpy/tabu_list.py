@@ -6,9 +6,12 @@ class IncumbentCallback_cplex(IncumbentCallback):
 
     def __call__(self):
         """
-        This is an inherent function in LazyConstraintCallback in cplex. 
+        This is an inherent function in IncumbentCallback in cplex. 
         This callback will be used after each new potential incumbent is found.
         https://www.ibm.com/support/knowledgecenter/SSSA5P_12.10.0/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.IncumbentCallback-class.html
+
+        IncumbentCallback will be activated after Lazyconstraint callback, when the potential incumbent solution is satisfies the lazyconstraints.
+        TODO: need to handle GOA same integer combination check in lazyconstraint callback in single_tree.py
         """
         solve_data = self.solve_data
         opt = self.opt
