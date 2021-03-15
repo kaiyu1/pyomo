@@ -360,7 +360,8 @@ def generate_lag_objective_function(model, setpoint_model, config, solve_data, d
                 r = 1
                 rho = numpy.linalg.norm(jac_lag/(2*r))
             elif config.sqp_lag_scaling_coef == 'variable_dependent':
-                r = numpy.sqrt(len(temp_model.MindtPy_utils.discrete_variable_list))
+                r = numpy.sqrt(
+                    len(temp_model.MindtPy_utils.discrete_variable_list))
                 rho = numpy.linalg.norm(jac_lag/(2*r))
 
             return Objective(expr=first_order_term + rho*sum([(model_var - setpoint_var.value)**2 for (model_var, setpoint_var) in zip(model_vars, setpoint_vars)]))
@@ -408,7 +409,7 @@ def generate_norm1_norm_constraint(model, setpoint_model, config, discrete_only=
         expr=sum(norm_constraint_blk.L1_slack_var[idx] for idx in norm_constraint_blk.L1_slack_idx) <= rhs)
 
 
-def set_solver_options(opt, solve_data, config, solver_type, regularization=False):
+def set_solver_options(opt, solve_data, config, solver_type, regularization=False, fixed_nlp=False, feasibility_nlp=False, relaxed_nlp=False, fp_nlp=False):
     """ set options for MIP/NLP solvers
 
     Args:
@@ -423,8 +424,6 @@ def set_solver_options(opt, solve_data, config, solver_type, regularization=Fals
         regularization (bool, optional): Boolean. 
             Defaults to False.
     """
-    # TODO: integrate nlp_args here
-    # nlp_args = dict(config.nlp_solver_args)
     elapsed = get_main_elapsed_time(solve_data.timing)
     remaining = int(max(config.time_limit - elapsed, 1))
     if solver_type == 'mip':
@@ -438,6 +437,17 @@ def set_solver_options(opt, solve_data, config, solver_type, regularization=Fals
                 opt.options['threads'] = config.threads
     elif solver_type == 'nlp':
         solver_name = config.nlp_solver
+        if config.strategy in {'OA', 'FP'}:
+            if fixed_nlp or fp_nlp:
+                set_constr_viol_tol = True
+            elif feasibility_nlp or relaxed_nlp:
+                set_constr_viol_tol = False
+            else:
+                set_constr_viol_tol = False
+        elif config.strategy == 'GOA':
+            set_constr_viol_tol = False
+        else:
+            set_constr_viol_tol = False
     # TODO: opt.name doesn't work for GAMS
     if solver_name in {'cplex', 'gurobi', 'gurobi_persistent'}:
         opt.options['timelimit'] = remaining
@@ -471,55 +481,59 @@ def set_solver_options(opt, solve_data, config, solver_type, regularization=Fals
         # opt.options['mipgap'] = config.mip_solver_mipgap
     elif solver_name == 'baron':
         opt.options['MaxTime'] = remaining
-        opt.options['AbsConFeasTol'] = config.zero_tolerance
+        if set_constr_viol_tol:
+            opt.options['AbsConFeasTol'] = config.zero_tolerance
     elif solver_name == 'ipopt':
         opt.options['max_cpu_time'] = remaining
-        opt.options['constr_viol_tol'] = config.zero_tolerance
+        if set_constr_viol_tol:
+            opt.options['constr_viol_tol'] = config.zero_tolerance
     elif solver_name == 'gams':
         if solver_type == 'mip':
             opt.options['add_options'] = ['option optcr=%s;' % config.mip_solver_mipgap,
                                           'option reslim=%s;' % remaining]
         elif solver_type == 'nlp':
             opt.options['add_options'] = ['option reslim=%s;' % remaining]
-            if config.nlp_solver_args.__contains__('solver'):
-                if config.nlp_solver_args['solver'] in {'ipopt', 'ipopth', 'msnlp', 'conopt', 'baron'}:
-                    if config.nlp_solver_args['solver'] == 'ipopt':
+            if set_constr_viol_tol:
+                if config.nlp_solver_args.__contains__('solver'):
+                    if config.nlp_solver_args['solver'] in {'ipopt', 'ipopth', 'msnlp', 'conopt', 'baron'}:
+                        if config.nlp_solver_args['solver'] == 'ipopt':
+                            opt.options['add_options'].append(
+                                '$onecho > ipopt.opt')
+                            opt.options['add_options'].append(
+                                'constr_viol_tol ' + str(config.zero_tolerance))
+                        elif config.nlp_solver_args['solver'] == 'ipopth':
+                            opt.options['add_options'].append(
+                                '$onecho > ipopth.opt')
+                            opt.options['add_options'].append(
+                                'constr_viol_tol ' + str(config.zero_tolerance))
+                            # TODO: Ipopt warmstart option
+                            # opt.options['add_options'].append('warm_start_init_point       yes\n'
+                            #                                   'warm_start_bound_push       1e-9\n'
+                            #                                   'warm_start_bound_frac       1e-9\n'
+                            #                                   'warm_start_slack_bound_frac 1e-9\n'
+                            #                                   'warm_start_slack_bound_push 1e-9\n'
+                            #                                   'warm_start_mult_bound_push  1e-9\n')
+                        elif config.nlp_solver_args['solver'] == 'conopt':
+                            opt.options['add_options'].append(
+                                '$onecho > conopt.opt')
+                            opt.options['add_options'].append(
+                                'RTNWMA ' + str(config.zero_tolerance))
+                        elif config.nlp_solver_args['solver'] == 'msnlp':
+                            opt.options['add_options'].append(
+                                '$onecho > msnlp.opt')
+                            opt.options['add_options'].append(
+                                'feasibility_tolerance ' + str(config.zero_tolerance))
+                        elif config.nlp_solver_args['solver'] == 'baron':
+                            opt.options['add_options'].append(
+                                '$onecho > baron.opt')
+                            opt.options['add_options'].append(
+                                'AbsConFeasTol ' + str(config.zero_tolerance))
+                        opt.options['add_options'].append('$offecho')
                         opt.options['add_options'].append(
-                            '$onecho > ipopt.opt')
-                        opt.options['add_options'].append(
-                            'constr_viol_tol ' + str(config.zero_tolerance))
-                    elif config.nlp_solver_args['solver'] == 'ipopth':
-                        opt.options['add_options'].append(
-                            '$onecho > ipopth.opt')
-                        opt.options['add_options'].append(
-                            'constr_viol_tol ' + str(config.zero_tolerance))
-                        # TODO: Ipopt warmstart option
-                        # opt.options['add_options'].append('warm_start_init_point       yes\n'
-                        #                                   'warm_start_bound_push       1e-9\n'
-                        #                                   'warm_start_bound_frac       1e-9\n'
-                        #                                   'warm_start_slack_bound_frac 1e-9\n'
-                        #                                   'warm_start_slack_bound_push 1e-9\n'
-                        #                                   'warm_start_mult_bound_push  1e-9\n')
-                    elif config.nlp_solver_args['solver'] == 'conopt':
-                        opt.options['add_options'].append(
-                            '$onecho > conopt.opt')
-                        opt.options['add_options'].append(
-                            'RTNWMA ' + str(config.zero_tolerance))
-                    elif config.nlp_solver_args['solver'] == 'msnlp':
-                        opt.options['add_options'].append(
-                            '$onecho > msnlp.opt')
-                        opt.options['add_options'].append(
-                            'feasibility_tolerance ' + str(config.zero_tolerance))
-                    elif config.nlp_solver_args['solver'] == 'baron':
-                        opt.options['add_options'].append(
-                            '$onecho > baron.opt')
-                        opt.options['add_options'].append(
-                            'AbsConFeasTol ' + str(config.zero_tolerance))
-                    opt.options['add_options'].append('$offecho')
-                    opt.options['add_options'].append('GAMS_MODEL.optfile=1')
+                            'GAMS_MODEL.optfile=1')
 
 
-def get_integer_solution(model,string_zero=False):
+def get_integer_solution(model, string_zero=False):
     """ obtain the value of integer variables from the provided model.
 
     Args:

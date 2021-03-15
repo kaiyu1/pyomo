@@ -136,7 +136,8 @@ def init_rNLP(solve_data, config):
     TransformationFactory('core.relax_integer_vars').apply_to(m)
     nlp_args = dict(config.nlp_solver_args)
     nlpopt = SolverFactory(config.nlp_solver)
-    set_solver_options(nlpopt, solve_data, config, solver_type='nlp')
+    set_solver_options(nlpopt, solve_data, config,
+                       solver_type='nlp', relaxed_nlp=True)
     with SuppressInfeasibleWarning():
         results = nlpopt.solve(m, tee=config.nlp_solver_tee, **nlp_args)
     subprob_terminate_cond = results.solver.termination_condition
