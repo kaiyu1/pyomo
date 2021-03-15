@@ -105,7 +105,8 @@ def solve_subproblem(solve_data, config):
     # Solve the NLP
     nlpopt = SolverFactory(config.nlp_solver)
     nlp_args = dict(config.nlp_solver_args)
-    set_solver_options(nlpopt, solve_data, config, solver_type='nlp', fixed_nlp=True)
+    set_solver_options(nlpopt, solve_data, config,
+                       solver_type='nlp', fixed_nlp=True)
     with SuppressInfeasibleWarning():
         with time_code(solve_data.timing, 'fixed subproblem'):
             results = nlpopt.solve(
@@ -198,8 +199,9 @@ def handle_subproblem_optimal(fixed_nlp, solve_data, config, fp=False):
     #     # !!THIS SEEMS LIKE A BUG!! - mrmundt #
     #     add_gbd_cut(solve_data, config)
 
-    var_values = list(v.value for v in fixed_nlp.MindtPy_utils.variable_list)
     if config.add_no_good_cuts:
+        var_values = list(
+            v.value for v in fixed_nlp.MindtPy_utils.variable_list)
         add_no_good_cuts(var_values, solve_data, config, feasible=True)
 
     config.call_after_subproblem_feasible(fixed_nlp, solve_data)
@@ -247,15 +249,42 @@ def handle_subproblem_infeasible(fixed_nlp, solve_data, config):
         config.logger.info('Solving feasibility problem')
         feas_subproblem, feas_subproblem_results = solve_feasibility_subproblem(
             solve_data, config)
-        if solve_data.should_terminate:
+        subprob_terminate_cond = feas_subproblem_results.solver.termination_condition
+        if subprob_terminate_cond in {tc.optimal, tc.locallyOptimal, tc.feasible}:
+            copy_var_list_values(feas_subproblem.MindtPy_utils.variable_list,
+                                 solve_data.mip.MindtPy_utils.variable_list,
+                                 config)
+            if config.strategy == 'OA':
+                add_oa_cuts(solve_data.mip, dual_values, solve_data, config)
+            elif config.strategy == 'GOA':
+                add_affine_cuts(solve_data, config)
+        elif subprob_terminate_cond in {tc.infeasible, tc.noSolution}:
+            config.logger.error('Feasibility subproblem infeasible. '
+                                'This should never happen.')
+            if config.strategy == 'GOA':
+                pass
+            else:
+                solve_data.should_terminate = True
+                solve_data.results.solver.status = SolverStatus.error
+                return
+        elif subprob_terminate_cond is tc.maxIterations:
+            config.logger.error('Subsolver reached its maximum number of iterations without converging, '
+                                'consider increasing the iterations limit of the subsolver or reviewing your formulation.')
+            solve_data.should_terminate = True
+            solve_data.results.solver.status = SolverStatus.error
             return
-        copy_var_list_values(feas_subproblem.MindtPy_utils.variable_list,
-                             solve_data.mip.MindtPy_utils.variable_list,
-                             config)
-        if config.strategy == 'OA':
-            add_oa_cuts(solve_data.mip, dual_values, solve_data, config)
-        elif config.strategy == 'GOA':
-            add_affine_cuts(solve_data, config)
+        else:
+            config.error('MindtPy unable to handle feasibility subproblem termination condition '
+                         'of {}'.format(subprob_terminate_cond))
+            solve_data.should_terminate = True
+            solve_data.results.solver.status = SolverStatus.error
+            return
+
+        if value(feas_subproblem.MindtPy_utils.feas_obj.expr) <= config.zero_tolerance:
+            config.logger.warning('The objective value %.4E of feasibility problem is less than zero_tolerance. '
+                                  'This indicates that the nlp subproblem is feasible, although it is found infeasible in the previous step. '
+                                  'Check the nlp solver output' % value(feas_subproblem.MindtPy_utils.feas_obj.expr))
+
     # Add a no-good cut to exclude this discrete option
     var_values = list(v.value for v in fixed_nlp.MindtPy_utils.variable_list)
     if config.add_no_good_cuts:
@@ -340,7 +369,8 @@ def solve_feasibility_subproblem(solve_data, config):
     TransformationFactory('core.fix_integer_vars').apply_to(feas_subproblem)
     nlpopt = SolverFactory(config.nlp_solver)
     nlp_args = dict(config.nlp_solver_args)
-    set_solver_options(nlpopt, solve_data, config, solver_type='nlp', feasibility_nlp=True)
+    set_solver_options(nlpopt, solve_data, config,
+                       solver_type='nlp', feasibility_nlp=True)
     with SuppressInfeasibleWarning():
         try:
             with time_code(solve_data.timing, 'feasibility subproblem'):
@@ -355,34 +385,5 @@ def solve_feasibility_subproblem(solve_data, config):
             with time_code(solve_data.timing, 'feasibility subproblem'):
                 feas_soln = nlpopt.solve(
                     feas_subproblem, tee=config.nlp_solver_tee, **nlp_args)
-    subprob_terminate_cond = feas_soln.solver.termination_condition
-    if subprob_terminate_cond in {tc.optimal, tc.locallyOptimal, tc.feasible}:
-        copy_var_list_values(
-            MindtPy.variable_list,
-            solve_data.working_model.MindtPy_utils.variable_list,
-            config)
-    elif subprob_terminate_cond in {tc.infeasible, tc.noSolution}:
-        config.logger.error('Feasibility subproblem infeasible. '
-                            'This should never happen.')
-        solve_data.should_terminate = True
-        solve_data.results.solver.status = SolverStatus.error
-        return feas_subproblem, feas_soln
-    elif subprob_terminate_cond is tc.maxIterations:
-        config.logger.error('Subsolver reached its maximum number of iterations without converging, '
-                            'consider increasing the iterations limit of the subsolver or reviewing your formulation.')
-        solve_data.should_terminate = True
-        solve_data.results.solver.status = SolverStatus.error
-        return feas_subproblem, feas_soln
-    else:
-        config.error('MindtPy unable to handle feasibility subproblem termination condition '
-                     'of {}'.format(subprob_terminate_cond))
-        solve_data.should_terminate = True
-        solve_data.results.solver.status = SolverStatus.error
-        return feas_subproblem, feas_soln
-
-    if value(MindtPy.feas_obj.expr) <= config.zero_tolerance:
-        config.logger.warning('The objective value %.4E of feasibility problem is less than zero_tolerance. '
-                              'This indicates that the nlp subproblem is feasible, although it is found infeasible in the previous step. '
-                              'Check the nlp solver output' % value(MindtPy.feas_obj.expr))
 
     return feas_subproblem, feas_soln
