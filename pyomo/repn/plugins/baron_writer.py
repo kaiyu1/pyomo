@@ -15,15 +15,13 @@
 import itertools
 import logging
 import math
-from six import iteritems, StringIO, iterkeys
-from six.moves import xrange
-from pyutilib.math import isclose
+from six import iteritems, StringIO
 
 from pyomo.common.collections import OrderedSet
 from pyomo.opt import ProblemFormat
 from pyomo.opt.base import AbstractProblemWriter, WriterFactory
 from pyomo.core.expr.numvalue import (
-    is_fixed, value, native_numeric_types, native_types, nonpyomo_leaf_types,
+    value, native_numeric_types, native_types, nonpyomo_leaf_types,
 )
 from pyomo.core.expr import current as EXPR
 from pyomo.core.base import (SortComponents,
@@ -32,11 +30,9 @@ from pyomo.core.base import (SortComponents,
                              NumericLabeler,
                              Constraint,
                              Objective,
-                             Var, Param)
+                             Param)
 from pyomo.core.base.component import ActiveComponent
-from pyomo.core.base.set_types import *
-from pyomo.core.kernel.base import ICategorizedObject
-# CLH: EXPORT suffixes "constraint_types" and "branching_priorities"
+#CLH: EXPORT suffixes "constraint_types" and "branching_priorities"
 #     pass their respective information to the .bar file
 import pyomo.core.base.suffix
 import pyomo.core.kernel.suffix
@@ -372,7 +368,7 @@ class ProblemWriter_bar(AbstractProblemWriter):
         else:
             def mutable_param_gen(b):
                 for param in block.component_objects(Param):
-                    if param._mutable and param.is_indexed():
+                    if param.mutable and param.is_indexed():
                         param_data_iter = \
                             (param_data for index, param_data
                              in iteritems(param))
@@ -641,12 +637,12 @@ class ProblemWriter_bar(AbstractProblemWriter):
         #                                                           descend_into=False))
         #    create_symbols_func(symbol_map, tmp, labeler)
 
-        # GAH: Not sure this is necessary, and also it would break for
-        #      non-mutable indexed params so I am commenting out for now.
-        # for param_data in active_components_data(block, Param, sort=sorter):
-        # instead of checking if param_data._mutable:
-        # if not param_data.is_constant():
-        #    create_symbol_func(symbol_map, param_data, labeler)
+            # GAH: Not sure this is necessary, and also it would break for
+            #      non-mutable indexed params so I am commenting out for now.
+            #for param_data in active_components_data(block, Param, sort=sorter):
+                #instead of checking if param_data.mutable:
+                #if not param_data.is_constant():
+                #    create_symbol_func(symbol_map, param_data, labeler)
 
         #symbol_map_variable_ids = set(symbol_map.byObject.keys())
         #object_symbol_dictionary = symbol_map.byObject

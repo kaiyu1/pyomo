@@ -12,12 +12,11 @@ import copy
 import itertools
 import logging
 import sys
-from six import iteritems, itervalues
-from six.moves import builtins
+import builtins
 
 from pyomo.core.expr.expr_errors import TemplateExpressionError
 from pyomo.core.expr.numvalue import (
-    NumericValue, native_numeric_types, native_types, nonpyomo_leaf_types,
+    NumericValue, native_types, nonpyomo_leaf_types,
     as_numeric, value,
 )
 from pyomo.core.expr.numeric_expr import ExpressionBase, SumExpression
@@ -83,20 +82,20 @@ class GetItemExpression(ExpressionBase):
         # storage scheme), but as of now [30 Apr 20], there are no known
         # Components where this assumption will cause problems.
         return any( getattr(x, 'is_potentially_variable', _false)()
-                    for x in itervalues(getattr(base, '_data', {})) )
+                    for x in getattr(base, '_data', {}).values() )
 
     def _is_fixed(self, values):
         if not all(values[1:]):
             return False
         _true = lambda: True
         return all( getattr(x, 'is_fixed', _true)()
-                    for x in itervalues(values[0]) )
+                    for x in values[0].values() )
 
     def _compute_polynomial_degree(self, result):
         if any(x != 0 for x in result[1:]):
             return None
         ans = 0
-        for x in itervalues(result[0]):
+        for x in result[0].values():
             if x.__class__ in nonpyomo_leaf_types \
                or not hasattr(x, 'polynomial_degree'):
                 continue
@@ -745,11 +744,9 @@ def templatize_rule(block, rule, index_set):
         builtins.sum = context.sum_template
         # Get the index templates needed for calling the rule
         if index_set is not None:
-            if not index_set.isfinite():
-                raise TemplateExpressionError(
-                    None,
-                    "Cannot templatize rule with non-finite indexing set")
-            indices = next(iter(index_set))
+            # Note, do not rely on the __iter__ overload, as non-finite
+            # Sets don't have an __iter__.
+            indices = next(iter(context.get_iter(index_set)))
             try:
                 context.cache.pop()
             except IndexError:
@@ -764,7 +761,7 @@ def templatize_rule(block, rule, index_set):
         #
         # TBD: Should this just return a "FORALL()" expression node that
         # behaves similarly to the GetItemExpression node?
-        return rule(block, *indices), indices
+        return rule(block, indices), indices
     except:
         internal_error = sys.exc_info()
         raise

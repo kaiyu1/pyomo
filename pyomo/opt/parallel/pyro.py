@@ -10,16 +10,10 @@
 
 __all__ = ("PyroAsynchronousActionManager",)
 
-try:
-    from collections import OrderedDict
-except ImportError:                         #pragma:nocover
-    from ordereddict import OrderedDict
-
+from pyomo.common.collections import OrderedDict
 from pyomo.common.dependencies import attempt_import
 from pyomo.opt.parallel.manager import \
     (AsynchronousActionManager,
-     ActionManagerError,
-     ActionHandle,
      ActionStatus)
 
 pyu_pyro = attempt_import('pyutilib.pyro', alt_names=['pyu_pyro'])[0]

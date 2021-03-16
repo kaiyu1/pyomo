@@ -11,35 +11,41 @@
 #
 # Utility functions
 #
-import collections
 import functools
 import inspect
-import six
 
-from six import iteritems, iterkeys
-
-if six.PY2:
-    getargspec = inspect.getargspec
-    from collections import Sequence as collections_Sequence
-    from collections import Mapping as collections_Mapping
-else:
-    # For our needs, getfullargspec is a drop-in replacement for
-    # getargspec (which was removed in Python 3.x)
-    getargspec = inspect.getfullargspec
-    from collections.abc import Sequence as collections_Sequence
-    from collections.abc import Mapping as collections_Mapping
-
+from collections.abc import Sequence
+from collections.abc import Mapping
 
 from pyomo.common import DeveloperError
 from pyomo.core.expr.numvalue import (
     native_types,
 )
+from pyomo.core.base.indexed_component import normalize_index
+
 
 def is_functor(obj):
     """
     Returns true iff obj.__call__ is defined.
     """
     return inspect.isfunction(obj) or hasattr(obj,'__call__')
+
+
+def flatten_tuple(x):
+    """
+    This wraps around normalize_index. It flattens a nested sequence into 
+    a single tuple and always returns a tuple, even for single
+    element inputs.
+    
+    Returns
+    -------
+    tuple
+
+    """
+    x = normalize_index(x)
+    if isinstance(x, tuple):
+        return x
+    return (x,)
 
 
 #
@@ -64,10 +70,7 @@ def _disable_method(fcn, msg=None):
     # an error).  For backwards compatability with Python 2.x, we will
     # create a temporary (local) function using exec that matches the
     # function signature passed in and raises an exception
-    if six.PY2:
-        args = str(inspect.formatargspec(*getargspec(fcn)))
-    else:
-        args = str(inspect.signature(fcn))
+    args = str(inspect.signature(fcn))
     assert args == '(self)' or args.startswith('(self,')
 
     # lambda comes through with a function name "<lambda>".  We will
@@ -166,22 +169,27 @@ def Initializer(init,
         if init is arg_not_specified:
             return None
         return ConstantInitializer(init)
-    elif inspect.isfunction(init):
+    elif inspect.isfunction(init) or inspect.ismethod(init):
         if not allow_generators and inspect.isgeneratorfunction(init):
             raise ValueError("Generator functions are not allowed")
         # Historically pyomo.core.base.misc.apply_indexed_rule
         # accepted rules that took only the parent block (even for
         # indexed components).  We will preserve that functionality
         # here.
-        _args = getargspec(init)
-        if len(_args.args) == 1 and _args.varargs is None:
+        _args = inspect.getfullargspec(init)
+        _nargs = len(_args.args)
+        if inspect.ismethod(init) and init.__self__ is not None:
+            # Ignore 'self' for bound instance methods and 'cls' for
+            # @classmethods
+            _nargs -= 1
+        if _nargs == 1 and _args.varargs is None:
             return ScalarCallInitializer(init)
         else:
             return IndexedCallInitializer(init)
-    elif isinstance(init, collections_Mapping):
+    elif isinstance(init, Mapping):
         return ItemInitializer(init)
-    elif isinstance(init, collections_Sequence) \
-            and not isinstance(init, six.string_types):
+    elif isinstance(init, Sequence) \
+            and not isinstance(init, str):
         if treat_sequences_as_mappings:
             return ItemInitializer(init)
         else:
@@ -198,6 +206,12 @@ def Initializer(init,
         # segfault in pypy3 7.3.0).  We will immediately expand the
         # generator into a tuple and then store it as a constant.
         return ConstantInitializer(tuple(init))
+    elif type(init) is functools.partial:
+        _args = inspect.getfullargspec(init.func)
+        if len(_args.args) - len(init.args) == 1 and _args.varargs is None:
+            return ScalarCallInitializer(init)
+        else:
+            return IndexedCallInitializer(init)
     else:
         return ConstantInitializer(init)
 
@@ -219,7 +233,7 @@ class InitializerBase(object):
         return {k:getattr(self,k) for k in self.__slots__}
 
     def __setstate__(self, state):
-        for key, val in iteritems(state):
+        for key, val in state.items():
             object.__setattr__(self, key, val)
 
     def constant(self):
@@ -269,7 +283,10 @@ class ItemInitializer(InitializerBase):
         return True
 
     def indices(self):
-        return iterkeys(self._dict)
+        try:
+            return self._dict.keys()
+        except AttributeError:
+            return range(len(self._dict))
 
 
 class IndexedCallInitializer(InitializerBase):
@@ -384,9 +401,12 @@ class CountedCallInitializer(InitializerBase):
 
         # Note that this code will only be called once, and only if
         # the object is not a scalar.
-        _args = getargspec(self._fcn)
+        _args = inspect.getfullargspec(self._fcn)
+        _nargs = len(_args.args)
+        if inspect.ismethod(self._fcn) and self._fcn.__self__ is not None:
+            _nargs -= 1
         _len = len(idx) if idx.__class__ is tuple else 1
-        if _len + 2 == len(_args.args):
+        if _len + 2 == _nargs:
             self._is_counted_rule = True
         else:
             self._is_counted_rule = False

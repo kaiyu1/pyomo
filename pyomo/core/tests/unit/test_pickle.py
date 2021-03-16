@@ -12,7 +12,6 @@
 #
 
 import pickle
-import six
 import os
 import sys
 from os.path import abspath, dirname
@@ -20,8 +19,7 @@ currdir = dirname(abspath(__file__))+os.sep
 import platform
 
 import pyutilib.th as unittest
-from pyomo.environ import *
-import pyomo.core.expr.current as EXPR
+from pyomo.environ import AbstractModel, ConcreteModel, Set, Param, Var, Constraint, Objective, Reals, NonNegativeReals, sum_product
 
 
 using_pypy = platform.python_implementation() == "PyPy"
@@ -307,9 +305,7 @@ class Test(unittest.TestCase):
         model.con = Constraint(rule=rule1)
         model.con2 = Constraint(model.a, rule=rule2)
         instance = model.create_instance()
-        if (not six.PY3) and ('dill' in sys.modules):
-            pickle.dumps(instance)
-        elif using_pypy:
+        if using_pypy:
             str_ = pickle.dumps(instance)
             tmp_ = pickle.loads(str_)
         else:

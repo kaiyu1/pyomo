@@ -15,7 +15,7 @@
 import os
 import sys
 from os.path import abspath, dirname, normpath, join
-from pyutilib.misc import import_file
+from pyomo.common.fileutils import import_file
 currdir = dirname(abspath(__file__))
 exdir = normpath(join(currdir,'..','..','..','examples', 'gdp'))
 
@@ -28,8 +28,7 @@ import pyutilib.th as unittest
 
 from pyomo.common.dependencies import yaml, yaml_available, yaml_load_args
 import pyomo.opt
-import pyomo.scripting.pyomo_main as main
-from pyomo.environ import *
+from pyomo.environ import SolverFactory, TransformationFactory
 
 from six import iteritems
 

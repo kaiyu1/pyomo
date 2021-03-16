@@ -19,7 +19,6 @@ from pyomo.core.kernel.block import IBlock
 from pyomo.core import Suffix, Var, Constraint, Objective
 from pyomo.opt import ProblemFormat, SolverFactory, TerminationCondition
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
-from pyomo.solvers.plugins.solvers.direct_solver import DirectSolver
 
 thisDir = dirname(abspath( __file__ ))
 
@@ -86,6 +85,11 @@ class _BaseTestModel(object):
               load_solutions):
         """ Optimize the model """
         assert self.model is not None
+
+        if not io_options:
+            io_options = {}
+        if not solver_options:
+            solver_options = {}
 
         opt = SolverFactory(solver, solver_io=io)
         opt.options.update(solver_options)
@@ -366,7 +370,7 @@ class _BaseTestModel(object):
                             "Expected solution to be missing suffix %s"
                             % suffix_name)
                     elif not abs(solution[block.name][suffix_name] - \
-                                 suffix.get(block)) < sefl.diff_tol:
+                                 suffix.get(block)) < self.diff_tol:
                         return (False,
                                 error_str.format(
                                     block.name,

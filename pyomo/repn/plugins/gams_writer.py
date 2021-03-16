@@ -12,19 +12,17 @@
 # Problem Writer for GAMS Format Files
 #
 
-from six import StringIO, string_types, iteritems
-from six.moves import xrange
+from six import StringIO, iteritems
 
-from pyutilib.misc import PauseGC
-
+from pyomo.common.gc_manager import PauseGC
 from pyomo.core.expr import current as EXPR
 from pyomo.core.expr.numvalue import (
-    is_fixed, value, as_numeric, native_types, native_numeric_types,
+    value, as_numeric, native_types, native_numeric_types,
     nonpyomo_leaf_types,
 )
 from pyomo.core.base import (
-    SymbolMap, ShortNameLabeler, NumericLabeler, Block, Constraint, Expression,
-    Objective, Var, Param, minimize, Suffix, SortComponents)
+    SymbolMap, ShortNameLabeler, NumericLabeler, Constraint, 
+    Objective, Var, minimize, SortComponents)
 from pyomo.core.base.component import ActiveComponent
 from pyomo.core.kernel.base import ICategorizedObject
 from pyomo.opt import ProblemFormat
@@ -461,7 +459,7 @@ class ProblemWriter_gams(AbstractProblemWriter):
         # immediately anyway.
         with PauseGC() as pgc:
             try:
-                if isinstance(output_filename, string_types):
+                if isinstance(output_filename, str):
                     output_file = open(output_filename, "w")
                 else:
                     # Support passing of stream such as a StringIO
@@ -489,7 +487,7 @@ class ProblemWriter_gams(AbstractProblemWriter):
                     put_results_format=put_results_format,
                 )
             finally:
-                if isinstance(output_filename, string_types):
+                if isinstance(output_filename, str):
                     output_file.close()
 
         return output_filename, symbolMap

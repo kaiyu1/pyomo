@@ -11,34 +11,22 @@
 import sys
 import re
 import copy
-import math
 import logging
 
-from pyutilib.misc import quote_split, Options
-import pyutilib.common
-from pyutilib.misc import flatten
+from pyomo.common.log import is_debug_set
+from pyomo.common.collections import Bunch, OrderedDict
+from pyomo.common.errors import ApplicationError
 
 from pyomo.dataportal.parse_datacmds import (
     parse_data_commands, _re_number
 )
 from pyomo.dataportal.factory import DataManagerFactory, UnknownDataManager
 from pyomo.core.base.set import UnknownSetDimen
-
-try:
-    from collections import OrderedDict
-except:
-    from ordereddict import OrderedDict
+from pyomo.core.base.util import flatten_tuple
 
 from six.moves import xrange
-try:
-    unicode
-except:
-    unicode = str
-try:
-    long
-    numlist = {bool, int, float, long}
-except:
-    numlist = {bool, int, float}
+
+numlist = {bool, int, float}
 
 logger = logging.getLogger('pyomo.core')
 
@@ -114,7 +102,7 @@ def _preprocess_data(cmd):
     Called by _process_data() to (1) combine tokens that comprise a tuple
     and (2) combine the ':' token with the previous token
     """
-    generate_debug_messages = __debug__ and logger.isEnabledFor(logging.DEBUG)
+    generate_debug_messages = is_debug_set(logger)
     if generate_debug_messages:
         logger.debug("_preprocess_data(start) %s",cmd)
     state = 0
@@ -202,7 +190,7 @@ def _process_set(cmd, _model, _data):
     Called by _process_data() to process a set declaration.
     """
     #print("SET %s" % cmd)
-    generate_debug_messages = __debug__ and logger.isEnabledFor(logging.DEBUG)
+    generate_debug_messages = is_debug_set(logger)
     if generate_debug_messages:
         logger.debug("DEBUG: _process_set(start) %s",cmd)
     #
@@ -253,12 +241,11 @@ def _process_set_data(cmd, sname, _model):
     """
     Called by _process_set() to process set data.
     """
-    generate_debug_messages = __debug__ and logger.isEnabledFor(logging.DEBUG)
+    generate_debug_messages = is_debug_set(logger)
     if generate_debug_messages:
         logger.debug("DEBUG: _process_set_data(start) %s",cmd)
     if len(cmd) == 0:
         return []
-    sd = sname
     ans=[]
     i=0
     template=None
@@ -301,7 +288,7 @@ def _process_param(cmd, _model, _data, _default, index=None, param=None, ncolumn
     Called by _process_data to process data for a Parameter declaration
     """
     #print('PARAM %s index=%s ncolumns=%s' %(cmd, index, ncolumns))
-    generate_debug_messages = __debug__ and logger.isEnabledFor(logging.DEBUG)
+    generate_debug_messages = is_debug_set(logger)
     if generate_debug_messages:
         logger.debug("DEBUG: _process_param(start) %s",cmd)
     #
@@ -549,7 +536,7 @@ def _apply_templates(cmd):
             nindex = len(tmp)
             template=tmp
             ilist = set()
-            for kk in range(len(tmp)):
+            for kk in range(nindex):
                 if tmp[kk] == '*':
                     ilist.add(kk)
         elif len(ilist) == 0:
@@ -570,7 +557,7 @@ def _process_data_list(param_name, dim, cmd):
     """\
  Called by _process_param() to process a list of data for a Parameter.
  """
-    generate_debug_messages = __debug__ and logger.isEnabledFor(logging.DEBUG)
+    generate_debug_messages = is_debug_set(logger)
     if generate_debug_messages:
         logger.debug("process_data_list %d %s",dim,cmd)
 
@@ -707,7 +694,7 @@ def _process_table(cmd, _model, _data, _default, options=None):
     #print("_param %s" % _param)
     #print("_labels %s" % _labels)
 #
-    options = Options(**_options)
+    options = Bunch(**_options)
     for key in options:
         if not key in ['columns']:
             raise ValueError("Unknown table option '%s'" % key)
@@ -755,7 +742,7 @@ def _process_table(cmd, _model, _data, _default, options=None):
             tmp.append(cmap[col])
         if not sname in cmap:
             cmap[sname] = tmp
-        cols = flatten(tmp)
+        cols = list(flatten_tuple(tmp))
         #
         _cmd = ['set', sname, ':=']
         i = 0
@@ -788,7 +775,7 @@ def _process_table(cmd, _model, _data, _default, options=None):
                 raise IOError("Unexpected table column '%s' for table value '%s'" % (col, vname))
             tmp.append(cmap[col])
         #print("X %s %s" % (len(cols), tmp))
-        cols = flatten(tmp)
+        cols = list(flatten_tuple(tmp))
         #print("X %s" % len(cols))
         #print("VNAME %s %s" % (vname, cmap[vname]))
         if vname in cmap:
@@ -840,7 +827,7 @@ def _process_load(cmd, _model, _data, _default, options=None):
     if len(cmd) < 2:
         raise IOError("The 'load' command must specify a filename")
 
-    options = Options(**_options)
+    options = Bunch(**_options)
     for key in options:
         if not key in ['range','filename','format','using','driver','query','table','user','password','database']:
             raise ValueError("Unknown load option '%s'" % key)
@@ -858,7 +845,7 @@ def _process_load(cmd, _model, _data, _default, options=None):
         data = DataManagerFactory(tmp)
         if (data is None) or \
            isinstance(data, UnknownDataManager):
-            raise pyutilib.common.ApplicationError("Data manager '%s' is not available." % tmp)
+            raise ApplicationError("Data manager '%s' is not available." % tmp)
     else:
         try:
             data = DataManagerFactory(options.using)
@@ -866,9 +853,8 @@ def _process_load(cmd, _model, _data, _default, options=None):
             data = None
         if (data is None) or \
            isinstance(data, UnknownDataManager):
-            raise pyutilib.common.ApplicationError("Data manager '%s' is not available." % options.using)
+            raise ApplicationError("Data manager '%s' is not available." % options.using)
     set_name=None
-    param_name=None
     #
     # Create symbol map
     #
@@ -941,7 +927,7 @@ def _process_data(cmd, _model, _data, _default, Filename_, Lineno_=0, index=None
     global Filename
     Lineno=Lineno_
     Filename=Filename_
-    generate_debug_messages = __debug__ and logger.isEnabledFor(logging.DEBUG)
+    generate_debug_messages = is_debug_set(logger)
     if generate_debug_messages:
         logger.debug("DEBUG: _process_data (start) %s",cmd)
     if len(cmd) == 0:                       #pragma:nocover

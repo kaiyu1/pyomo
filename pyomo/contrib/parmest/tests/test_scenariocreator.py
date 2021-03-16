@@ -1,15 +1,16 @@
-# the matpolotlib stuff is to avoid $DISPLAY errors on Travis (DLW Oct 2018)
-try:
-    import matplotlib
-    matplotlib.use('Agg')
-except:
-    pass
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and 
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain 
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
+
 from pyomo.common.dependencies import (
-    numpy as np, numpy_available,
     pandas as pd, pandas_available,
-    scipy, scipy_available,
 )
-imports_present = numpy_available & pandas_available & scipy_available
 
 uuid_available = True
 try:
@@ -19,22 +20,17 @@ except:
 
 import pyutilib.th as unittest
 import os
-import sys
-
 import pyomo.contrib.parmest.parmest as parmest
 import pyomo.contrib.parmest.scenariocreator as sc
-import pyomo.contrib.parmest.graphics as graphics
-import pyomo.contrib.parmest as parmestbase
-import pyomo.environ as pyo
 import pyomo.contrib.parmest.examples.semibatch.scencreate as sbc
-
-from pyomo.opt import SolverFactory
+import pyomo.environ as pyo
+from pyomo.environ import SolverFactory
 ipopt_available = SolverFactory('ipopt').available()
 
 testdir = os.path.dirname(os.path.abspath(__file__))
 
 
-@unittest.skipIf(not imports_present, "Cannot test parmest: required dependencies are missing")
+@unittest.skipIf(not parmest.parmest_available, "Cannot test parmest: required dependencies are missing")
 @unittest.skipIf(not ipopt_available, "The 'ipopt' command is not available")
 class pamest_Scenario_creator_reactor_design(unittest.TestCase):
     
@@ -102,7 +98,7 @@ class pamest_Scenario_creator_reactor_design(unittest.TestCase):
         
 
 
-@unittest.skipIf(not imports_present, "Cannot test parmest: required dependencies are missing")
+@unittest.skipIf(not parmest.parmest_available, "Cannot test parmest: required dependencies are missing")
 @unittest.skipIf(not ipopt_available, "The 'ipopt' command is not available")
 class  pamest_Scenario_creator_semibatch(unittest.TestCase):
     

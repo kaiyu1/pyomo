@@ -10,7 +10,7 @@
 #
 import re
 import pyutilib.th as unittest
-from pyutilib.misc.redirect_io import capture_output
+from pyomo.common.tee import capture_output
 
 from pyomo.environ import SolverFactory
 from pyomo.scripting.driver_help import help_solvers, help_transformations
@@ -48,7 +48,7 @@ class Test(unittest.TestCase):
             elif s.available():
                 self.assertTrue(
                     re.search("\n   \-%s " % solver, OUT),
-                    "'   +%s' not found in help --solvers" % solver)
+                    "'   -%s' not found in help --solvers" % solver)
             else:
                 self.assertTrue(
                     re.search("\n    %s " % solver, OUT),

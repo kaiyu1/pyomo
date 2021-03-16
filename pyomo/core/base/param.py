@@ -16,6 +16,7 @@ import logging
 from weakref import ref as weakref_ref
 
 from pyomo.common.deprecation import deprecation_warning
+from pyomo.common.log import is_debug_set
 from pyomo.common.modeling import NoArgumentGiven
 from pyomo.common.timing import ConstructionTimer
 from pyomo.core.base.plugin import ModelComponentFactory
@@ -23,10 +24,9 @@ from pyomo.core.base.component import ComponentData
 from pyomo.core.base.indexed_component import IndexedComponent, \
     UnindexedComponent_set
 from pyomo.core.base.misc import apply_indexed_rule, apply_parameterized_indexed_rule
-from pyomo.core.base.numvalue import NumericValue, native_types, value
+from pyomo.core.base.numvalue import NumericValue, native_types
 from pyomo.core.base.set_types import Any, Reals
-
-from six import iteritems, iterkeys, next, itervalues
+from pyomo.core.base.units_container import units
 
 logger = logging.getLogger('pyomo.core')
 
@@ -225,8 +225,11 @@ class Param(IndexedComponent):
         initialize  
             A dictionary or rule for setting up this parameter with existing 
             model data
-        unit: pyomo unit expression                                                                                            
+        unit: pyomo unit expression
             An expression containing the units for the parameter
+        mutable: `boolean`
+            Flag indicating if the value of the parameter may change between
+            calls to a solver. Defaults to `False`
     """
 
     DefaultMutable = False
@@ -248,8 +251,9 @@ class Param(IndexedComponent):
         self._mutable       = kwd.pop('mutable', Param.DefaultMutable )
         self._default_val   = kwd.pop('default', _NotValid )
         self._dense_initialize = kwd.pop('initialize_as_dense', False)
-        self._units         = kwd.pop('units', None)                                                                           
-        if self._units is not None:                                                                                            
+        self._units         = kwd.pop('units', None)
+        if self._units is not None:
+            self._units = units.get_units(self._units)
             self._mutable = True
         #
         if 'repn' in kwd:
@@ -290,6 +294,14 @@ class Param(IndexedComponent):
             return self._data.__iter__()
         return self._index.__iter__()
 
+    @property
+    def mutable(self):
+        return self._mutable
+
+    def get_units(self):
+        """Return the units for this ParamData"""
+        return self._units
+
     #
     # These are "sparse equivalent" access / iteration methods that
     # only loop over the defined data.
@@ -297,27 +309,27 @@ class Param(IndexedComponent):
 
     def sparse_keys(self):
         """Return a list of keys in the defined parameters"""
-        return list(iterkeys(self._data))
+        return list(self._data.keys())
 
     def sparse_values(self):
         """Return a list of the defined param data objects"""
-        return list(itervalues(self._data))
+        return list(self._data.values())
 
     def sparse_items(self):
         """Return a list (index,data) tuples for defined parameters"""
-        return list(iteritems(self._data))
+        return list(self._data.items())
 
     def sparse_iterkeys(self):
         """Return an iterator for the keys in the defined parameters"""
-        return iterkeys(self._data)
+        return self._data.keys()
 
     def sparse_itervalues(self):
         """Return an iterator for the defined param data objects"""
-        return itervalues(self._data)
+        return self._data.values()
 
     def sparse_iteritems(self):
         """Return an iterator of (index,data) tuples for defined parameters"""
-        return iteritems(self._data)
+        return self._data.items()
 
     def extract_values(self):
         """
@@ -398,7 +410,7 @@ class Param(IndexedComponent):
         #
         if check:
             if _isDict:
-                for index, new_value in iteritems(new_values):
+                for index, new_value in new_values.items():
                     self[index] = new_value
             else:
                 for index in self._index:
@@ -414,7 +426,7 @@ class Param(IndexedComponent):
                 # index is not already in the _data dict.  As these
                 # cases are rare, we will recover from the exception
                 # instead of incurring the penalty of checking.
-                for index, new_value in iteritems(new_values):
+                for index, new_value in new_values.items():
                     if index not in self._data:
                         self._data[index] = _ParamData(self)
                     self._data[index]._value = new_value
@@ -863,7 +875,7 @@ This has resulted in the conversion of the source to dense form.
         constructed.  We throw an exception if a user tries
         to use an uninitialized Param.
         """
-        if __debug__ and logger.isEnabledFor(logging.DEBUG):   #pragma:nocover
+        if is_debug_set(logger):   #pragma:nocover
             logger.debug("Constructing Param, name=%s, from data=%s"
                          % ( self.name, str(data) ))
         #
@@ -896,7 +908,7 @@ This has resulted in the conversion of the source to dense form.
         #
         if data is not None:
             try:
-                for key, val in iteritems(data):
+                for key, val in data.items():
                     self._setitem_when_not_present(
                         self._validate_index(key), val)
             except Exception:

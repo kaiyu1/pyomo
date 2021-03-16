@@ -16,6 +16,7 @@ from six import iteritems, itervalues
 from weakref import ref as weakref_ref
 
 from pyomo.common.errors import PyomoException
+from pyomo.common.log import is_debug_set
 from pyomo.common.modeling import unique_component_name
 from pyomo.common.timing import ConstructionTimer
 from pyomo.core import (
@@ -24,7 +25,7 @@ from pyomo.core import (
 from pyomo.core.base.component import (
     ActiveComponent, ActiveComponentData, ComponentData
 )
-from pyomo.core.base.numvalue import native_types
+from pyomo.core.base.numvalue import native_types, value
 from pyomo.core.base.block import _BlockData
 from pyomo.core.base.misc import apply_indexed_rule
 from pyomo.core.base.indexed_component import ActiveIndexedComponent
@@ -287,7 +288,6 @@ class _DisjunctionData(ActiveComponentData):
 
 @ModelComponentFactory.register("Disjunction expressions.")
 class Disjunction(ActiveIndexedComponent):
-    Skip = (0,)
     _ComponentDataClass = _DisjunctionData
 
     def __new__(cls, *args, **kwds):
@@ -358,7 +358,7 @@ class Disjunction(ActiveIndexedComponent):
                 self._data[key].xor = bool(value(val[key]))
 
     def construct(self, data=None):
-        if __debug__ and logger.isEnabledFor(logging.DEBUG):
+        if is_debug_set(logger):
             logger.debug("Constructing disjunction %s"
                          % (self.name))
         if self._constructed:

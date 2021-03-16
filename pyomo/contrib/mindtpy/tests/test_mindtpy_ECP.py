@@ -1,4 +1,5 @@
-"""Tests for the MindtPy solver plugin."""
+# -*- coding: utf-8 -*-
+"""Tests for the MindtPy solver."""
 from math import fabs
 import pyomo.core.base.symbolic
 import pyutilib.th as unittest
@@ -26,17 +27,17 @@ else:
 
 
 @unittest.skipIf(not subsolvers_available,
-                 "Required subsolvers %s are not available"
+                 'Required subsolvers %s are not available'
                  % (required_solvers,))
 @unittest.skipIf(not pyomo.core.base.symbolic.differentiate_available,
-                 "Symbolic differentiation is not available")
+                 'Symbolic differentiation is not available')
 class TestMindtPy(unittest.TestCase):
     """Tests for the MindtPy solver plugin."""
 
     def test_ECP_8PP(self):
         """Test the extended cutting plane decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = EightProcessFlowsheet()
+            model = EightProcessFlowsheet(convex=True)
             print('\n Solving 8PP problem with extended cutting plane')
             results = opt.solve(model, strategy='ECP',
                                 init_strategy='rNLP',
@@ -51,12 +52,12 @@ class TestMindtPy(unittest.TestCase):
     def test_ECP_8PP_init_max_binary(self):
         """Test the extended cutting plane decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = EightProcessFlowsheet()
+            model = EightProcessFlowsheet(convex=True)
             print('\n Solving 8PP problem with extended cutting plane(max_binary)')
             results = opt.solve(model, strategy='ECP',
                                 init_strategy='max_binary',
                                 mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0], obj_bound = 5500)
+                                nlp_solver=required_solvers[0], obj_bound=5500)
 
             self.assertIs(results.solver.termination_condition,
                           TerminationCondition.optimal)
@@ -65,11 +66,11 @@ class TestMindtPy(unittest.TestCase):
     def test_ECP_8PP_L2_norm(self):
         """Test the extended cutting plane decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = EightProcessFlowsheet()
+            model = EightProcessFlowsheet(convex=True)
             print('\n Solving 8PP problem with extended cutting plane(max_binary)')
             results = opt.solve(model, strategy='ECP',
                                 mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0], obj_bound = 5500,
+                                nlp_solver=required_solvers[0], obj_bound=5500,
                                 feasibility_norm='L2')
 
             self.assertIs(results.solver.termination_condition,
@@ -79,11 +80,11 @@ class TestMindtPy(unittest.TestCase):
     def test_ECP_8PP_sympy(self):
         """Test the extended cutting plane decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = EightProcessFlowsheet()
+            model = EightProcessFlowsheet(convex=True)
             print('\n Solving 8PP problem with extended cutting plane(max_binary)')
             results = opt.solve(model, strategy='ECP',
                                 mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0], obj_bound = 5500,
+                                nlp_solver=required_solvers[0], obj_bound=5500,
                                 differentiate_mode='sympy')
 
             self.assertIs(results.solver.termination_condition,
@@ -147,10 +148,11 @@ class TestMindtPy(unittest.TestCase):
     def test_ECP_ConstraintQualificationExample(self):
         with SolverFactory('mindtpy') as opt:
             model = ConstraintQualificationExample()
-            print('\n Solving Constraint Qualification Example with extended cutting plane')
+            print(
+                '\n Solving Constraint Qualification Example with extended cutting plane')
             results = opt.solve(model, strategy='ECP',
                                 mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0], bound_tolerance = 1e-5
+                                nlp_solver=required_solvers[0], bound_tolerance=1e-5
                                 )
             self.assertIs(results.solver.termination_condition,
                           TerminationCondition.optimal)
@@ -176,7 +178,7 @@ class TestMindtPy(unittest.TestCase):
             results = opt.solve(model, strategy='ECP',
                                 mip_solver=required_solvers[1],
                                 nlp_solver=required_solvers[0], bound_tolerance=1e-3,
-                                feasibility_norm="L_infinity"
+                                feasibility_norm='L_infinity'
                                 )
             self.assertIs(results.solver.termination_condition,
                           TerminationCondition.optimal)
@@ -244,7 +246,7 @@ class TestMindtPy(unittest.TestCase):
     def test_rNLP_add_slack(self):
         """Test the extended cutting plane decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = EightProcessFlowsheet()
+            model = EightProcessFlowsheet(convex=True)
             print(
                 '\n Test rNLP initialize strategy and add_slack to improve code coverage')
             opt.solve(model, strategy='ECP',
@@ -283,5 +285,6 @@ class TestMindtPy(unittest.TestCase):
                       )
             self.assertAlmostEqual(value(model.obj.expr), 14.83, places=1)
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     unittest.main()

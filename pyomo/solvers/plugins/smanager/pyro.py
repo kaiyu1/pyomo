@@ -20,8 +20,7 @@ except:
 
 import pyutilib.pyro
 from pyutilib.pyro import using_pyro4, TaskProcessingError
-import pyutilib.misc
-from pyomo.opt.base import OptSolver
+from pyomo.opt.base import OptSolver, SolverFactory
 from pyomo.opt.parallel.manager import ActionManagerError, ActionStatus
 from pyomo.opt.parallel.async_solver import (AsynchronousSolverManager,
                                              SolverManagerFactory)
@@ -31,6 +30,7 @@ import pyomo.core.base.suffix
 
 from pyomo.core.kernel.block import IBlock
 import pyomo.core.kernel.suffix
+from pyomo.common.collections import Bunch
 
 import six
 
@@ -70,7 +70,7 @@ class SolverManager_Pyro(PyroAsynchronousActionManager, AsynchronousSolverManage
             raise ActionManagerError(
                 "No solver passed to %s, use keyword option 'solver'"
                 % (type(self).__name__) )
-        if isinstance(opt, six.string_types):
+        if isinstance(opt, str):
             opt = SolverFactory(opt, solver_io=kwds.pop('solver_io', None))
 
         #
@@ -157,7 +157,7 @@ class SolverManager_Pyro(PyroAsynchronousActionManager, AsynchronousSolverManage
                 with open(warm_start_file_name, 'r') as f:
                     warm_start_file_string = f.read()
 
-        data = pyutilib.misc.Bunch(opt=opt.type, \
+        data = Bunch(opt=opt.type, \
                                    file=problem_file_string, \
                                    filename=opt._problem_files[0], \
                                    warmstart_file=warm_start_file_string, \

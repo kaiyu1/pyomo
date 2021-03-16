@@ -12,12 +12,11 @@ import sys
 import logging
 
 import pyutilib.th as unittest
-from pyutilib.misc import Options
 
+from pyomo.common.collections import Bunch
 from pyomo.opt import TerminationCondition
 from pyomo.solvers.tests.models.base import test_models
 from pyomo.solvers.tests.solvers import test_solver_cases
-import pyomo.kernel
 from pyomo.core.kernel.block import IBlock
 
 # For expected failures that appear in all known version
@@ -46,17 +45,12 @@ MissingSuffixFailures = {}
 # MOSEK
 #
 
-ExpectedFailures['mosek', 'python', 'QCP_simple'] = \
-    (lambda v: True,
-     "Conic constraints not yet handled by this interface")
+for _io in ('python', 'persistent'):
+    for _test in ('QCP_simple', 'QCP_simple_nosuffixes', 'MIQCP_simple'):
+        ExpectedFailures['mosek', _io, _test] = (
+            lambda v: True,
+            "Mosek does not handle nonconvex quadratic constraints")
 
-ExpectedFailures['mosek', 'python', 'QCP_simple_nosuffixes'] = \
-    (lambda v: True,
-     "Conic constraints not yet handled by this interface")
-
-ExpectedFailures['mosek', 'python', 'MIQCP_simple'] = \
-    (lambda v: True,
-     "Conic constraints not yet handled by this interface")
 #
 # CPLEX
 #
@@ -398,7 +392,7 @@ def test_scenarios(arg=None):
                     msg=case[2]
 
             # Return scenario dimensions and scenario information
-            yield (model, solver, io), Options(
+            yield (model, solver, io), Bunch(
                 status=status, msg=msg, model=_model, solver=None,
                 testcase=_solver_case, demo_limits=_solver_case.demo_limits,
                 exclude_suffixes=exclude_suffixes)
@@ -478,11 +472,12 @@ def run_test_scenarios(options):
     # Summarize the runtime statistics, by solver
     #
     summary = {}
-    total = Options(NumEPass=0, NumEFail=0, NumUPass=0, NumUFail=0)
+    total = Bunch(NumEPass=0, NumEFail=0, NumUPass=0, NumUFail=0)
     for key in stat:
         model, solver, io = key
         if not solver in summary:
-            summary[solver] = Options(NumEPass=0, NumEFail=0, NumUPass=0, NumUFail=0)
+            summary[solver] = Bunch(NumEPass=0, NumEFail=0,
+                                    NumUPass=0, NumUFail=0)
         _pass, _str = stat[key]
         if _pass:
             if _str == "Expected failure":

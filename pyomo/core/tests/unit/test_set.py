@@ -12,8 +12,7 @@ import copy
 import itertools
 import logging
 import pickle
-from six import StringIO, PY2
-from six.moves import xrange
+from io import StringIO
 from collections import namedtuple as NamedTuple
 
 try:
@@ -25,6 +24,7 @@ import pyutilib.th as unittest
 
 from pyomo.common import DeveloperError
 from pyomo.common.dependencies import numpy as np, numpy_available
+from pyomo.common.dependencies import pandas as pd, pandas_available
 from pyomo.common.log import LoggingIntercept
 from pyomo.core.expr import native_numeric_types, native_types
 import pyomo.core.base.set as SetModule
@@ -37,12 +37,12 @@ from pyomo.core.base.set import (
     AnyRange, _AnySet, Any, AnyWithNone, _EmptySet, EmptySet, Binary,
     Reals, NonNegativeReals, PositiveReals, NonPositiveReals, NegativeReals,
     Integers, PositiveIntegers, NegativeIntegers,
-    NonPositiveIntegers, NonNegativeIntegers,
+    NonNegativeIntegers,
     Set,
     SetOf, OrderedSetOf, UnorderedSetOf,
     RangeSet, _FiniteRangeSetData, _InfiniteRangeSetData,
     FiniteSimpleRangeSet, InfiniteSimpleRangeSet,
-    AbstractFiniteSimpleRangeSet, AbstractInfiniteSimpleRangeSet,
+    AbstractFiniteSimpleRangeSet, 
     SetUnion_InfiniteSet, SetUnion_FiniteSet, SetUnion_OrderedSet,
     SetIntersection_InfiniteSet, SetIntersection_FiniteSet,
     SetIntersection_OrderedSet,
@@ -1768,6 +1768,34 @@ class Test_SetOperator(unittest.TestCase):
         self.assertEqual(i.x[1].domain, i.A*i.B)
         self.assertEqual(i.x[1], [])
 
+    @unittest.skipIf(not pandas_available, "pandas is not available")
+    def test_pandas_multiindex_set_init(self):
+        # Test that TuplizeValuesInitializer does not assume truthiness
+        # If it does, pandas will complain with the following error:
+        # ValueError: The truth value of a MultiIndex is ambiguous. 
+        # Use a.empty, a.bool(), a.item(), a.any() or a.all().
+        iterables = [['bar', 'baz', 'foo', 'qux'], ['one', 'two']]
+        pandas_index = pd.MultiIndex.from_product(
+            iterables, 
+            names=['first', 'second']
+        )
+
+        model = ConcreteModel()
+        model.a = Set(initialize=pandas_index,
+                      dimen=pandas_index.nlevels)
+
+        # we will confirm that dimension is inferred correctly
+        model.b = Set(initialize=pandas_index)
+
+        self.assertIsInstance(model.a, Set)
+        self.assertEquals(list(model.a), list(pandas_index))
+        self.assertEquals(model.a.dimen, pandas_index.nlevels)
+
+        self.assertIsInstance(model.b, Set)
+        self.assertEquals(list(model.b), list(pandas_index))
+        self.assertEquals(model.b.dimen, pandas_index.nlevels)
+
+
 class TestSetUnion(unittest.TestCase):
     def test_pickle(self):
         a = SetOf([1,3,5]) | SetOf([2,3,4])
@@ -3333,20 +3361,49 @@ class TestGlobalSets(unittest.TestCase):
                 RangeSet( name='foo', ranges=(NR(0,2,1),) ), NS)
 
     def test_RealSet_IntegerSet(self):
-        a = SetModule.RealSet()
+        output = StringIO()
+        with LoggingIntercept(output, 'pyomo.core'):
+            a = SetModule.RealSet()
+        self.assertIn('DEPRECATED: The use of RealSet,', output.getvalue())
         self.assertEqual(a, Reals)
         self.assertIsNot(a, Reals)
 
-        a = SetModule.RealSet(bounds=(1,3))
+        output = StringIO()
+        with LoggingIntercept(output, 'pyomo.core'):
+            a = SetModule.RealSet(bounds=(1,3))
+        self.assertIn('DEPRECATED: The use of RealSet,', output.getvalue())
         self.assertEqual(a.bounds(), (1,3))
 
-        a = SetModule.IntegerSet()
+        output = StringIO()
+        with LoggingIntercept(output, 'pyomo.core'):
+            a = SetModule.IntegerSet()
+        self.assertIn('DEPRECATED: The use of RealSet,', output.getvalue())
         self.assertEqual(a, Integers)
         self.assertIsNot(a, Integers)
 
-        a = SetModule.IntegerSet(bounds=(1,3))
+        output = StringIO()
+        with LoggingIntercept(output, 'pyomo.core'):
+            a = SetModule.IntegerSet(bounds=(1,3))
+        self.assertIn('DEPRECATED: The use of RealSet,', output.getvalue())
         self.assertEqual(a.bounds(), (1,3))
         self.assertEqual(list(a), [1,2,3])
+
+        m = ConcreteModel()
+
+        output = StringIO()
+        with LoggingIntercept(output, 'pyomo.core'):
+            m.x = Var(within=SetModule.RealSet)
+        self.assertIn('DEPRECATED: The use of RealSet,', output.getvalue())
+
+        output = StringIO()
+        with LoggingIntercept(output, 'pyomo.core'):
+            m.y = Var(within=SetModule.RealSet())
+        self.assertIn('DEPRECATED: The use of RealSet,', output.getvalue())
+
+        output = StringIO()
+        with LoggingIntercept(output, 'pyomo.core'):
+            m.z = Var(within=SetModule.RealSet(bounds=(0,None)))
+        self.assertIn('DEPRECATED: The use of RealSet,', output.getvalue())
 
         with self.assertRaisesRegex(
                 RuntimeError, "Unexpected keyword arguments: \{'foo': 5\}"):
@@ -3429,7 +3486,7 @@ def _init_set(m, *args):
     n = 1
     for i in args:
         n *= i
-    return xrange(n)
+    return range(n)
 
 
 class TestSet(unittest.TestCase):
@@ -3828,12 +3885,15 @@ class TestSet(unittest.TestCase):
         m = ConcreteModel()
         m.I = Set([1,2,3], ordered=False)
         self.assertEqual(len(m.I), 0)
+        self.assertEqual(m.I.data(), {})
         m.I[1]
         self.assertEqual(len(m.I), 1)
         self.assertEqual(m.I[1], [])
+        self.assertEqual(m.I.data(), {1:()})
 
         self.assertEqual(m.I[2], [])
         self.assertEqual(len(m.I), 2)
+        self.assertEqual(m.I.data(), {1:(), 2:()})
 
         m.I[1].add(1)
         m.I[2].add(2)
@@ -3851,6 +3911,7 @@ class TestSet(unittest.TestCase):
         self.assertIs(type(m.I[1]), _FiniteSetData)
         self.assertIs(type(m.I[2]), _FiniteSetData)
         self.assertIs(type(m.I[3]), _FiniteSetData)
+        self.assertEqual(m.I.data(), {1:(1,), 2:(2,), 3:(4,)})
 
         # Explicit (constant) construction
         m = ConcreteModel()
@@ -3868,6 +3929,7 @@ class TestSet(unittest.TestCase):
         self.assertIs(type(m.I[1]), _InsertionOrderSetData)
         self.assertIs(type(m.I[2]), _InsertionOrderSetData)
         self.assertIs(type(m.I[3]), _InsertionOrderSetData)
+        self.assertEqual(m.I.data(), {1:(4,2,5), 2:(4,2,5), 3:(4,2,5)})
 
         # Explicit (constant) construction
         m = ConcreteModel()
@@ -3885,6 +3947,7 @@ class TestSet(unittest.TestCase):
         self.assertIs(type(m.I[1]), _SortedSetData)
         self.assertIs(type(m.I[2]), _SortedSetData)
         self.assertIs(type(m.I[3]), _SortedSetData)
+        self.assertEqual(m.I.data(), {1:(2,4,5), 2:(2,4,5), 3:(2,4,5)})
 
         # Explicit (procedural) construction
         m = ConcreteModel()
@@ -3896,6 +3959,7 @@ class TestSet(unittest.TestCase):
         self.assertEqual(sorted(m.I._data.keys()), [1,2])
         self.assertEqual(list(m.I[1]), [1,2,3])
         self.assertEqual(list(m.I[2]), [4,5,6])
+        self.assertEqual(m.I.data(), {1:(1,2,3), 2:(4,5,6)})
 
 
     def test_naming(self):
@@ -4123,7 +4187,7 @@ class TestSet(unittest.TestCase):
 
         m = ConcreteModel()
         m.I_index = RangeSet(3)
-        m.I = Set(m.I_index, initialize=lambda m,i: xrange(i+1),
+        m.I = Set(m.I_index, initialize=lambda m,i: range(i+1),
                   domain=Integers)
         m.J = Set(ordered=False)
         m.K = Set(initialize=[(1,2), (3,4)], ordered=Set.SortedOrder)
@@ -4238,8 +4302,8 @@ class TestSet(unittest.TestCase):
         m.I = Set(initialize=[1,2,3])
         m.J = Set(initialize=[4,5,6])
         m.K = Set(initialize=[(1,4),(2,6),(3,5)], within=m.I*m.J)
-        m.II = Set([1,2,3], initialize={1:[0], 2:[1,2], 3: xrange(3)})
-        m.JJ = Set([1,2,3], initialize={1:[0], 2:[1,2], 3: xrange(3)})
+        m.II = Set([1,2,3], initialize={1:[0], 2:[1,2], 3: range(3)})
+        m.JJ = Set([1,2,3], initialize={1:[0], 2:[1,2], 3: range(3)})
         m.KK = Set([1,2], initialize=[], dimen=lambda m,i: i)
 
         output = StringIO()
@@ -5531,18 +5595,13 @@ class TestIssues(unittest.TestCase):
             "Testing for set subsets with 'a in b' is deprecated.",
             output.getvalue()
         )
-        if PY2:
+        # Note that pypy raises a different exception from cpython
+        err = "((unhashable type: 'OrderedSimpleSet')" \
+            "|('OrderedSimpleSet' objects are unhashable))"
+        with self.assertRaisesRegexp(TypeError, err):
             self.assertFalse(m.s in m.t)
-            with self.assertRaisesRegexp(KeyError, "Index 's' is not valid"):
-                m.x[m.s].display()
-        else:
-            # Note that pypy raises a different exception from cpython
-            err = "((unhashable type: 'OrderedSimpleSet')" \
-                "|('OrderedSimpleSet' objects are unhashable))"
-            with self.assertRaisesRegexp(TypeError, err):
-                self.assertFalse(m.s in m.t)
-            with self.assertRaisesRegexp(TypeError, err):
-                m.x[m.s].display()
+        with self.assertRaisesRegexp(TypeError, err):
+            m.x[m.s].display()
 
         self.assertEqual(list(m.x), ['one'])
 

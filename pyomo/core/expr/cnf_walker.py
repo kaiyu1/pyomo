@@ -1,14 +1,24 @@
-from six import iterkeys
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
+
 
 from pyomo.common import DeveloperError
+from pyomo.common.collections import ComponentMap
+from pyomo.common.dependencies import attempt_import
 from pyomo.core.expr.logical_expr import (
-    AndExpression, EquivalenceExpression, equivalent, ImplicationExpression, implies, land, lnot, lor, NotExpression,
-    OrExpression, special_boolean_atom_types, XorExpression, )
+    AndExpression, EquivalenceExpression, equivalent, ImplicationExpression,
+    implies, land, lnot, lor, NotExpression,
+    OrExpression, special_boolean_atom_types, XorExpression,
+)
 from pyomo.core.expr.numvalue import native_types, value
 from pyomo.core.expr.visitor import StreamBasedExpressionVisitor
-from pyomo.core.kernel.component_map import ComponentMap
-
-from pyomo.common.dependencies import attempt_import
 
 _operatorMap = {}
 _pyomo_operator_map = {}
@@ -59,7 +69,7 @@ class _PyomoSympyLogicalBimap(object):
         return sympy_obj
 
     def sympyVars(self):
-        return iterkeys(self.sympy2pyomo)
+        return self.sympy2pyomo.keys()
 
 
 class _Pyomo2SympyVisitor(StreamBasedExpressionVisitor):

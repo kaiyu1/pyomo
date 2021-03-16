@@ -10,7 +10,6 @@
 
 import logging
 import sys
-from six import iteritems
 
 from pyomo.common.extensions import ExtensionBuilderFactory
 from pyomo.scripting.pyomo_parser import add_subparser
@@ -21,7 +20,14 @@ class ExtensionBuilder(object):
 
     def call(self, args, unparsed):
         logger = logging.getLogger('pyomo.common')
+        original_level = logger.level
         logger.setLevel(logging.INFO)
+        try:
+            return self._call_impl(args, unparsed, logger)
+        finally:
+            logger.setLevel(original_level)
+
+    def _call_impl(self, args, unparsed, logger):
         results = []
         result_fmt = "[%s]  %s"
         returncode = 0

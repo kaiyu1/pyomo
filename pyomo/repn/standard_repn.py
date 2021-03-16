@@ -15,15 +15,11 @@ __all__ = ['StandardRepn', 'generate_standard_repn']
 
 import sys
 import logging
-import math
 import itertools
 
 from pyomo.core.base import (Constraint,
                              Objective,
                              ComponentMap)
-
-from pyutilib.misc import Bunch
-from pyutilib.math.util import isclose as isclose_default
 
 from pyomo.core.expr import current as EXPR
 from pyomo.core.base.objective import (_GeneralObjectiveData,
@@ -33,31 +29,19 @@ from pyomo.core.base.expression import SimpleExpression, _GeneralExpressionData
 from pyomo.core.base.var import (SimpleVar,
                                  Var,
                                  _GeneralVarData,
-                                 _VarData,
                                  value)
-from pyomo.core.base.param import _ParamData
 from pyomo.core.base.numvalue import (NumericConstant,
-                                      native_numeric_types,
-                                      is_fixed)
-from pyomo.core.kernel.expression import IIdentityExpression, expression, noclone
-from pyomo.core.kernel.variable import IVariable
+                                      native_numeric_types)
+from pyomo.core.kernel.expression import expression, noclone
+from pyomo.core.kernel.variable import IVariable, variable
 from pyomo.core.kernel.objective import objective
 
-import six
-from six import iteritems
-from six import itervalues, iteritems, StringIO
-from six.moves import xrange, zip
-try:
-    basestring
-except:
-    basestring = str
+from six import iteritems, StringIO, PY3
+from six.moves import zip
 
 logger = logging.getLogger('pyomo.core')
 
-using_py3 = six.PY3
-
-from pyomo.core.base import _VarData, _GeneralVarData, SimpleVar
-from pyomo.core.kernel.variable import IVariable, variable
+using_py3 = PY3
 
 
 #
@@ -71,14 +55,7 @@ def isclose_const(a, b, rel_tol=1e-9, abs_tol=0.0):
             a = value(a)
         else:
             return False
-    # Copied from pyutilib.math.isclose
     return abs(a-b) <= max( rel_tol * max(abs(a), abs(b)), abs_tol )
-
-#
-# The global isclose() function used below.  This is either isclose_default
-# (defined in pyutilib) or isclose_const
-#
-isclose = isclose_default
 
 
 class StandardRepn(object):
@@ -260,14 +237,6 @@ def generate_standard_repn(expr, idMap=None, compute_values=True, verbose=False,
         Results = ResultsWithQuadratics
     else:
         Results = ResultsWithoutQuadratics
-    #
-    # Use a custom isclose function
-    #
-    global isclose
-    if compute_values:
-        isclose = isclose_default
-    else:
-        isclose = isclose_const
 
     if True:
         #
@@ -621,10 +590,10 @@ def _collect_prod(exp, multiplier, idMap, compute_values, verbose, quadratic):
     ans = Results()
     ans.constant = multiplier*lhs.constant * rhs.constant
     if not (lhs.constant.__class__ in native_numeric_types and lhs.constant == 0):
-        for key, coef in six.iteritems(rhs.linear):
+        for key, coef in iteritems(rhs.linear):
             ans.linear[key] = multiplier*coef*lhs.constant
     if not (rhs.constant.__class__ in native_numeric_types and rhs.constant == 0):
-        for key, coef in six.iteritems(lhs.linear):
+        for key, coef in iteritems(lhs.linear):
             if key in ans.linear:
                 ans.linear[key] += multiplier*coef*rhs.constant
             else:
@@ -632,26 +601,26 @@ def _collect_prod(exp, multiplier, idMap, compute_values, verbose, quadratic):
 
     if quadratic:
         if not (lhs.constant.__class__ in native_numeric_types and lhs.constant == 0):
-            for key, coef in six.iteritems(rhs.quadratic):
+            for key, coef in iteritems(rhs.quadratic):
                 ans.quadratic[key] = multiplier*coef*lhs.constant
         if not (rhs.constant.__class__ in native_numeric_types and rhs.constant == 0):
-            for key, coef in six.iteritems(lhs.quadratic):
+            for key, coef in iteritems(lhs.quadratic):
                 if key in ans.quadratic:
                     ans.quadratic[key] += multiplier*coef*rhs.constant
                 else:
                     ans.quadratic[key] = multiplier*coef*rhs.constant
-        for lkey, lcoef in six.iteritems(lhs.linear):
-            for rkey, rcoef in six.iteritems(rhs.linear):
+        for lkey, lcoef in iteritems(lhs.linear):
+            for rkey, rcoef in iteritems(rhs.linear):
                 ndx = (lkey, rkey) if lkey <= rkey else (rkey, lkey)
                 if ndx in ans.quadratic:
                     ans.quadratic[ndx] += multiplier*lcoef*rcoef
                 else:
                     ans.quadratic[ndx] = multiplier*lcoef*rcoef
         # TODO - Use quicksum here?
-        el_linear = multiplier*sum(coef*idMap[key] for key, coef in six.iteritems(lhs.linear))
-        er_linear = multiplier*sum(coef*idMap[key] for key, coef in six.iteritems(rhs.linear))
-        el_quadratic = multiplier*sum(coef*idMap[key[0]]*idMap[key[1]] for key, coef in six.iteritems(lhs.quadratic))
-        er_quadratic = multiplier*sum(coef*idMap[key[0]]*idMap[key[1]] for key, coef in six.iteritems(rhs.quadratic))
+        el_linear = multiplier*sum(coef*idMap[key] for key, coef in iteritems(lhs.linear))
+        er_linear = multiplier*sum(coef*idMap[key] for key, coef in iteritems(rhs.linear))
+        el_quadratic = multiplier*sum(coef*idMap[key[0]]*idMap[key[1]] for key, coef in iteritems(lhs.quadratic))
+        er_quadratic = multiplier*sum(coef*idMap[key[0]]*idMap[key[1]] for key, coef in iteritems(rhs.quadratic))
         ans.nonl += el_linear*er_quadratic + el_quadratic*er_linear
 
     return ans
@@ -908,7 +877,7 @@ def _collect_comparison(exp, multiplier, idMap, compute_values, verbose, quadrat
 
 def _collect_external_fn(exp, multiplier, idMap, compute_values, verbose, quadratic):
     if compute_values and exp.is_fixed():
-        return Results(nonl=multiplier*value(exp))
+        return Results(constant=multiplier*value(exp))
     return Results(nonl=multiplier*exp)
 
 
