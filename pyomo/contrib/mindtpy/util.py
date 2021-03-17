@@ -345,8 +345,8 @@ def generate_lag_objective_function(model, setpoint_model, config, solve_data, d
                                           if (temp_var_i.name in nlp_var and temp_var_j.name in nlp_var))
             if config.add_regularization == 'hess_lag':
                 return Objective(expr=first_order_term + second_order_term, sense=minimize)
-            elif config.add_regularization =='hess_only_lag':
-                return Objective(expr=first_order_term + second_order_term, sense=minimize)
+            elif config.add_regularization == 'hess_only_lag':
+                return Objective(expr=second_order_term, sense=minimize)
         elif config.add_regularization == 'sqp_lag':
             var_filter = (lambda v: v[1].is_integer()) if discrete_only \
                 else (lambda v: v[1].name != 'MindtPy_utils.objective_value' and
