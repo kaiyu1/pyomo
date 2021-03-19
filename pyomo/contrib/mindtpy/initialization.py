@@ -245,8 +245,15 @@ def init_max_binaries(solve_data, config):
             MindtPy.variable_list,
             solve_data.working_model.MindtPy_utils.variable_list,
             config)
-
-        pass  # good
+        fixed_nlp, fixed_nlp_result = solve_subproblem(
+            solve_data, config)
+        if fixed_nlp_result.solver.termination_condition in {tc.optimal, tc.locallyOptimal, tc.feasible}:
+            handle_subproblem_optimal(fixed_nlp, solve_data, config)
+        elif fixed_nlp_result.solver.termination_condition in {tc.infeasible, tc.noSolution}:
+            handle_subproblem_infeasible(fixed_nlp, solve_data, config)
+        else:
+            handle_subproblem_other_termination(fixed_nlp, fixed_nlp_result.solver.termination_condition,
+                                                solve_data, config)
     elif solve_terminate_cond is tc.infeasible:
         raise ValueError(
             'MILP master problem is infeasible. '
