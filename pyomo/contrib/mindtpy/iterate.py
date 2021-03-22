@@ -384,9 +384,12 @@ def bound_fix(solve_data, config, last_iter_cuts):
         except KeyError:
             config.logger.info('No stored bound found. Bound fix failed.')
     else:
-        config.logger.info(
-            'Solve the master problem without the last no_good cut to fix the bound.'
-            'zero_tolerance is set to 1E-4')
+        if config.strategy == 'OA':
+            config.logger.info('Solve the master problem without the last no_good cut to fix the bound.'
+                               'zero_tolerance is set to 1E-4')
+        elif config.strategy == 'GOA':
+            config.logger.info('Solve the master problem without all no_good cuts after the best solution has been found to fix the bound.'
+                               'zero_tolerance is set to 1E-4')
         config.zero_tolerance = 1E-4
         # Solve NLP subproblem
         # The constraint linearization happens in the handlers
@@ -420,8 +423,7 @@ def bound_fix(solve_data, config, last_iter_cuts):
                 if config.add_no_good_cuts:
                     for i in range(valid_no_good_cuts_num+1, len(
                             MindtPy.cuts.no_good_cuts)+1):
-                        MindtPy.cuts.no_good_cuts[i].deactivate(
-                        )
+                        MindtPy.cuts.no_good_cuts[i].deactivate()
                 if config.use_tabu_list:
                     solve_data.integer_list = solve_data.integer_list[:valid_no_good_cuts_num]
             except KeyError:
