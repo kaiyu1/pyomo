@@ -94,7 +94,7 @@ class MindtPySolver(object):
         obj = next(model.component_data_objects(ctype=Objective, active=True))
         if obj.expr.polynomial_degree() == 0:
             config.use_dual_bound = False
-
+        config.logger.setLevel(logging.INFO)
         if config.use_fbbt:
             fbbt(model)
             # TODO: logging_level is not logging.INFO here
@@ -103,7 +103,7 @@ class MindtPySolver(object):
         if config.use_baron_convexification:
             add_baron_cuts(model)
             config.logger.info(
-                "Use the fbbt to tighten the bounds of variables")
+                "Use the baron to tighten the bounds of variables")
 
         solve_data.original_model = model
         solve_data.working_model = model.clone()
