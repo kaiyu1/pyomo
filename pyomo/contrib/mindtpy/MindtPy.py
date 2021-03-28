@@ -38,7 +38,7 @@ from pyomo.contrib.mindtpy.iterate import MindtPy_iteration_loop
 from pyomo.contrib.mindtpy.util import (
     MindtPySolveData, model_is_valid, add_baron_cuts)
 from pyomo.core import (Block, ConstraintList, NonNegativeReals, RangeSet, Set, Suffix, Var, value,
-                        VarList, TransformationFactory)
+                        VarList, TransformationFactory, Objective)
 from pyomo.opt import SolverFactory, SolverResults
 from pyomo.common.collections import Bunch
 from pyomo.contrib.fbbt.fbbt import fbbt
