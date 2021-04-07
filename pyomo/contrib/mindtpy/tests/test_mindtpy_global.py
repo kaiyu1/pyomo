@@ -2,7 +2,7 @@
 """Tests for the MindtPy solver."""
 from math import fabs
 import pyomo.core.base.symbolic
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 from pyomo.contrib.mindtpy.tests.eight_process_problem import \
     EightProcessFlowsheet
 from pyomo.contrib.mindtpy.tests.MINLP_simple import SimpleMINLP as SimpleMINLP
@@ -22,7 +22,7 @@ from pyomo.solvers.tests.models.QCP_simple import QCP_simple
 from pyomo.solvers.tests.models.MIQCP_simple import MIQCP_simple
 from pyomo.opt import TerminationCondition
 
-required_solvers = ('baron', 'cplex')
+required_solvers = ('baron', 'cplex_persistent')
 if not all(SolverFactory(s).available(False) for s in required_solvers):
     subsolvers_available = False
 elif not SolverFactory('baron').license_is_valid():

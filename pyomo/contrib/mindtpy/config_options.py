@@ -40,8 +40,8 @@ def _get_MindtPy_config():
         domain=In(['level_L1', 'level_L2', 'level_L_infinity',
                    'grad_lag', 'hess_lag', 'hess_only_lag', 'sqp_lag']),
         description='add regularization',
-        doc='solving a projection problem before solve the fixed subproblem'
-            'the objective function of the projection problem.'
+        doc='solving a regularization problem before solve the fixed subproblem'
+            'the objective function of the regularization problem.'
     ))
     CONFIG.declare('init_strategy', ConfigValue(
         default=None,
@@ -67,11 +67,11 @@ def _get_MindtPy_config():
             'slack variables corresponding to all the constraints get '
             'multiplied by this number and added to the objective.'
     ))
-    CONFIG.declare('call_after_master_solve', ConfigValue(
+    CONFIG.declare('call_after_main_solve', ConfigValue(
         default=_DoNothing(),
         domain=None,
-        description='Function to be executed after every master problem',
-        doc='Callback hook after a solution of the master problem.'
+        description='Function to be executed after every main problem',
+        doc='Callback hook after a solution of the main problem.'
     ))
     CONFIG.declare('call_after_subproblem_solve', ConfigValue(
         default=_DoNothing(),
@@ -119,12 +119,12 @@ def _get_MindtPy_config():
     ))
     CONFIG.declare('single_tree', ConfigValue(
         default=False,
-        description='Use single tree implementation in solving the MILP master problem.',
+        description='Use single tree implementation in solving the MILP main problem.',
         domain=bool
     ))
     CONFIG.declare('solution_pool', ConfigValue(
         default=False,
-        description='Use solution pool in solving the MILP master problem.',
+        description='Use solution pool in solving the MILP main problem.',
         domain=bool
     ))
     CONFIG.declare('add_slack', ConfigValue(
@@ -213,13 +213,13 @@ def _add_subsolver_configs(CONFIG):
                    'gurobi_persistent', 'cplex_persistent']),
         description='MIP subsolver name',
         doc='Which MIP subsolver is going to be used for solving the mixed-'
-            'integer master problems.'
+            'integer main problems.'
     ))
     CONFIG.declare('mip_solver_args', ConfigBlock(
         implicit=True,
         description='MIP subsolver options',
         doc='Which MIP subsolver options to be passed to the solver while '
-            'solving the mixed-integer master problems.'
+            'solving the mixed-integer main problems.'
     ))
     CONFIG.declare('mip_solver_mipgap', ConfigValue(
         default=1E-4,
@@ -232,11 +232,11 @@ def _add_subsolver_configs(CONFIG):
         description='Threads',
         doc='Threads used by milp solver and nlp solver.'
     ))
-    CONFIG.declare('projection_mip_threads', ConfigValue(
+    CONFIG.declare('regularization_mip_threads', ConfigValue(
         default=0,
         domain=NonNegativeInt,
-        description='projection mip threads',
-        doc='Threads used by milp solver to solve projection master problem.'
+        description='regularization mip threads',
+        doc='Threads used by milp solver to solve regularization main problem.'
     ))
     CONFIG.declare('solver_tee', ConfigValue(
         default=False,
@@ -253,12 +253,12 @@ def _add_subsolver_configs(CONFIG):
         description='Stream the output of nlp solver to terminal.',
         domain=bool
     ))
-    CONFIG.declare('mip_projection_solver', ConfigValue(
+    CONFIG.declare('mip_regularization_solver', ConfigValue(
         default=None,
         domain=In(['gurobi', 'cplex', 'cbc', 'glpk', 'gams',
                    'gurobi_persistent', 'cplex_persistent']),
-        description='MIP subsolver for projection problem',
-        doc='Which MIP subsolver is going to be used for solving the projection problem'
+        description='MIP subsolver for regularization problem',
+        doc='Which MIP subsolver is going to be used for solving the regularization problem'
     ))
 
 
@@ -312,7 +312,7 @@ def _add_bound_configs(CONFIG):
     CONFIG.declare('obj_bound', ConfigValue(
         default=1E15,
         domain=PositiveFloat,
-        description='Bound applied to the linearization of the objective function if master MILP is unbounded.'
+        description='Bound applied to the linearization of the objective function if main MILP is unbounded.'
     ))
     CONFIG.declare('continuous_var_bound', ConfigValue(
         default=1e10,
@@ -341,33 +341,33 @@ def _add_fp_configs(CONFIG):
     # TODO: integrate this option
     CONFIG.declare('fp_projcuts', ConfigValue(
         default=True,
-        description='Whether to add cut derived from projection of MIP solution onto NLP feasible set',
+        description='Whether to add cut derived from regularization of MIP solution onto NLP feasible set',
         domain=bool
     ))
     CONFIG.declare('fp_transfercuts', ConfigValue(
         default=True,
-        description='Whether to transfer cuts from the Feasibility Pump MIP to master MIP in selected strategy (all except from the round in which the FP MIP became infeasible)',
+        description='Whether to transfer cuts from the Feasibility Pump MIP to main MIP in selected strategy (all except from the round in which the FP MIP became infeasible)',
         domain=bool
     ))
     CONFIG.declare('fp_projzerotol', ConfigValue(
         default=1E-4,
         domain=PositiveFloat,
-        description='Tolerance on when to consider optimal value of projection problem as zero, which may trigger the solution of a Sub-NLP'
+        description='Tolerance on when to consider optimal value of regularization problem as zero, which may trigger the solution of a Sub-NLP'
     ))
     CONFIG.declare('fp_mipgap', ConfigValue(
         default=1E-2,
         domain=PositiveFloat,
-        description='Optimality tolerance (relative gap) to use for solving MIP projection problem'
+        description='Optimality tolerance (relative gap) to use for solving MIP regularization problem'
     ))
     CONFIG.declare('fp_discrete_only', ConfigValue(
         default=True,
-        description='Only calculate the distance among discrete variables in projection problems.',
+        description='Only calculate the distance among discrete variables in regularization problems.',
         domain=bool
     ))
-    CONFIG.declare('fp_master_norm', ConfigValue(
+    CONFIG.declare('fp_main_norm', ConfigValue(
         default='L1',
         domain=In(['L1', 'L2', 'L_infinity']),
-        description='different forms of objective function MIP projection problem.'
+        description='different forms of objective function MIP regularization problem.'
     ))
     CONFIG.declare('fp_norm_constraint', ConfigValue(
         default=True,
@@ -385,31 +385,31 @@ def _add_loa_configs(CONFIG):
     CONFIG.declare('level_coef', ConfigValue(
         default=0.5,
         domain=PositiveFloat,
-        description='the coefficient in the projection master problem'
+        description='the coefficient in the regularization main problem'
         'represents how much the linear approximation of the MINLP problem is trusted.'
     ))
     CONFIG.declare('solution_limit', ConfigValue(
         default=10,
         domain=PositiveInt,
-        description='The solution limit for the projection problem since it does not need to be solved to optimality'
+        description='The solution limit for the regularization problem since it does not need to be solved to optimality'
     ))
     CONFIG.declare('add_cuts_at_incumbent', ConfigValue(
-        default=True,
-        description='Whether to add lazy cuts to the master problem at the incumbent solution found in the branch & bound tree',
+        default=False,
+        description='Whether to add lazy cuts to the main problem at the incumbent solution found in the branch & bound tree',
         domain=bool
     ))
     CONFIG.declare('reduce_level_coef', ConfigValue(
         default=False,
-        description='Whether to reduce level coefficient in LOA single tree when projection problem is infeasible',
+        description='Whether to reduce level coefficient in ROA single tree when regularization problem is infeasible',
         domain=bool
     ))
     CONFIG.declare('use_bb_tree_incumbent', ConfigValue(
         default=False,
-        description='Whether to use the incumbent solution of branch & bound tree in LOA single tree when projection problem is infeasible',
+        description='Whether to use the incumbent solution of branch & bound tree in ROA single tree when regularization problem is infeasible',
         domain=bool
     ))
     CONFIG.declare('sqp_lag_scaling_coef', ConfigValue(
-        default=None,
+        default='fixed',
         domain=In(['fixed', 'variable_dependent']),
         description='the coefficient used to scale the L2 norm in sqp_lag'
     ))
@@ -421,15 +421,16 @@ def check_config(config):
     if config.add_regularization in {'grad_lag', 'hess_lag', 'hess_only_lag', 'sqp_lag'}:
         config.calculate_dual = True
     if config.add_regularization is not None:
-        if config.projection_mip_threads == 0 and config.threads > 0:
-            config.projection_mip_threads = config.threads
-            config.logger.info('Set projection_mip_threads equal to threads')
+        if config.regularization_mip_threads == 0 and config.threads > 0:
+            config.regularization_mip_threads = config.threads
+            config.logger.info('Set regularization_mip_threads equal to threads')
         if config.single_tree:
+            config.add_cuts_at_incumbent = True
             # if no method is activated by users, we will use use_bb_tree_incumbent by default
             if not (config.reduce_level_coef or config.use_bb_tree_incumbent):
                 config.use_bb_tree_incumbent = True
-        if config.mip_projection_solver is None:
-            config.mip_projection_solver = config.mip_solver
+        if config.mip_regularization_solver is None:
+            config.mip_regularization_solver = config.mip_solver
     if config.single_tree:
         config.iteration_limit = 1
         config.add_slack = False

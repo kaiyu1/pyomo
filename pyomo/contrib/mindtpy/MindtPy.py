@@ -33,7 +33,7 @@ from __future__ import division
 import logging
 from pyomo.contrib.gdpopt.util import (copy_var_list_values, create_utility_block,
                                        time_code, setup_results_object, process_objective, lower_logger_level_to)
-from pyomo.contrib.mindtpy.initialization import MindtPy_initialize_master
+from pyomo.contrib.mindtpy.initialization import MindtPy_initialize_main
 from pyomo.contrib.mindtpy.iterate import MindtPy_iteration_loop
 from pyomo.contrib.mindtpy.util import MindtPySolveData, model_is_valid
 from pyomo.core import (Block, ConstraintList, NonNegativeReals,
@@ -117,7 +117,15 @@ class MindtPySolver(object):
             process_objective(solve_data, config,
                               move_linear_objective=(config.init_strategy == 'FP'
                                                      or config.add_regularization is not None),
-                              use_mcpp=config.use_mcpp)
+                              use_mcpp=config.use_mcpp,
+                              updata_var_con_list=config.add_regularization is None
+                              )
+            # The epigraph constraint is very "flat" for brnaching rules,
+            # we want to use to original model for the main mip.
+            if MindtPy.objective_list[0].expr.polynomial_degree() in (1, 0) and config.add_regularization is not None:
+                MindtPy.objective_list[0].activate()
+                MindtPy.objective_constr.deactivate()
+                MindtPy.objective.deactivate()
 
             # Save model initial values.
             solve_data.initial_var_values = list(
@@ -212,9 +220,9 @@ class MindtPySolver(object):
                     solve_data.working_model.ipopt_zU_out = Suffix(
                         direction=Suffix.IMPORT)
 
-            # Initialize the master problem
+            # Initialize the main problem
             with time_code(solve_data.timing, 'initialization'):
-                MindtPy_initialize_master(solve_data, config)
+                MindtPy_initialize_main(solve_data, config)
 
             # Algorithm main loop
             with time_code(solve_data.timing, 'main loop'):
