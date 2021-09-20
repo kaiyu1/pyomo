@@ -11,11 +11,13 @@
 #
 #
 
-import pyutilib.th as unittest
-from pyomo.environ import *
+import pyomo.common.unittest as unittest
+from pyomo.environ import (
+    ConcreteModel, Var, Param, Set, Constraint, Objective, Expression,
+    Suffix, RangeSet, ExternalFunction, units, maximize, sin, cos, sqrt,
+)
 from pyomo.network import Port, Arc
 from pyomo.dae import ContinuousSet, DerivativeVar
-from pyomo.mpec import Complementarity, complements
 from pyomo.gdp import Disjunct, Disjunction
 from pyomo.core.base.units_container import (
     pint_available, UnitsError,
@@ -103,8 +105,9 @@ class TestUnitsChecking(unittest.TestCase):
         @m.Constraint(m.S)
         def unitless_con(m,i):
             return m.unitless[i] == 42.0
-
-        m.obj = Objective(expr=m.v, sense=maximize)
+        @m.Constraint(m.S)
+        def sqrt_con(m,i):
+            return sqrt(m.v[i]) == sqrt(m.x[i]/m.t[i])
 
         assert_units_consistent(m)  # check model
         assert_units_consistent(m.x)  # check var
@@ -126,8 +129,8 @@ class TestUnitsChecking(unittest.TestCase):
         assert_units_equivalent(m.v[2], u.m/u.s)  # check var data
         assert_units_equivalent(m.unitless[2], u.dimensionless)  # check var data unitless
         assert_units_equivalent(m.unitless[2], None)  # check var
-        assert_units_equivalent(m.vel_con[2]) # check constraint data
-        assert_units_equivalent(m.unitless_con[2], u.dimensionless) # check unitless constraint data
+        assert_units_equivalent(m.vel_con[2].body, u.m/u.s) # check constraint data
+        assert_units_equivalent(m.unitless_con[2].body, u.dimensionless) # check unitless constraint data
 
         @m.Constraint(m.S)
         def broken(m,i):

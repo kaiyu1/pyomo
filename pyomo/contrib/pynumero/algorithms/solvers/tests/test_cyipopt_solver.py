@@ -8,13 +8,15 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 import pyomo.environ as pyo
 import os
 
 from pyomo.contrib.pynumero.dependencies import (
-    numpy as np, numpy_available, scipy_sparse as spa, scipy_available
+    numpy as np, numpy_available, scipy, scipy_available
 )
+from pyomo.common.dependencies.scipy import sparse as spa
+
 if not (numpy_available and scipy_available):
     raise unittest.SkipTest("Pynumero needs scipy and numpy to run NLP tests")
 
@@ -25,14 +27,16 @@ if not AmplInterface.available():
 
 from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
 
-try:
-    import ipopt
-except ImportError:
+from pyomo.contrib.pynumero.algorithms.solvers.cyipopt_solver import (
+    cyipopt_available
+)
+if not cyipopt_available:
     raise unittest.SkipTest("Pynumero needs cyipopt to run CyIpoptSolver tests")
 
 from pyomo.contrib.pynumero.algorithms.solvers.cyipopt_solver import (
     CyIpoptSolver, CyIpoptNLP
 )
+
 
 def create_model1():
     m = pyo.ConcreteModel()
@@ -44,6 +48,7 @@ def create_model1():
     m.x[2].setlb(0.0)
 
     return m
+
 
 def create_model2():
     m = pyo.ConcreteModel()
@@ -223,7 +228,3 @@ class TestCyIpoptSolver(unittest.TestCase):
         x, info = solver.solve(tee=False)
         nlp.set_primals(x)
         self.assertAlmostEqual(nlp.evaluate_objective(), -5.0879028e+02, places=5)
-
-        
-
-

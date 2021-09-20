@@ -1,9 +1,20 @@
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
+
+
 # -*- coding: UTF-8 -*-
 """Tests disjunct fixing."""
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 from pyomo.environ import (Block,
                            Constraint, ConcreteModel, TransformationFactory,
-                           RangeSet, NonNegativeReals)
+                           NonNegativeReals)
 from pyomo.gdp import Disjunct, Disjunction, GDP_Error
 
 
@@ -54,11 +65,12 @@ class TestFixDisjuncts(unittest.TestCase):
         m.d1 = Disjunct()
         m.d2 = Disjunct()
         m.d = Disjunction(expr=[m.d1, m.d2])
-        m.d1.indicator_var.domain = NonNegativeReals
-        m.d2.indicator_var.domain = NonNegativeReals
-        m.d1.indicator_var.set_value(0.5)
-        m.d2.indicator_var.set_value(0.5)
-        with self.assertRaises(ValueError):
+        m.d1.binary_indicator_var.domain = NonNegativeReals
+        m.d2.binary_indicator_var.domain = NonNegativeReals
+        m.d1.binary_indicator_var.set_value(0.5)
+        m.d2.binary_indicator_var.set_value(0.5)
+        with self.assertRaisesRegex(
+                ValueError, "Non-binary indicator variable value"):
             TransformationFactory('gdp.fix_disjuncts').apply_to(m)
 
 

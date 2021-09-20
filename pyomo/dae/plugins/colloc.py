@@ -9,8 +9,6 @@
 #  ___________________________________________________________________________
 
 import logging
-from six.moves import xrange
-from six import next
 
 # If the user has numpy then the collocation points and the a matrix for
 # the Runge-Kutta basis formulation will be calculated as needed.
@@ -44,12 +42,12 @@ def _lagrange_radau_transform(v, s):
     adot = s.get_discretization_info()['adot']
 
     def _fun(i):
-        tmp = sorted(s)
-        idx = tmp.index(i)
+        tmp = list(s)
+        idx = s.ord(i)-1
         if idx == 0:  # Don't apply this equation at initial point
             raise IndexError("list index out of range")
         low = s.get_lower_element_boundary(i)
-        lowidx = tmp.index(low)
+        lowidx = s.ord(low)-1
         return sum(v(tmp[lowidx + j]) * adot[j][idx - lowidx] *
                    (1.0 / (tmp[lowidx + ncp] - tmp[lowidx]))
                    for j in range(ncp + 1))
@@ -61,12 +59,12 @@ def _lagrange_radau_transform_order2(v, s):
     adotdot = s.get_discretization_info()['adotdot']
 
     def _fun(i):
-        tmp = sorted(s)
-        idx = tmp.index(i)
+        tmp = list(s)
+        idx = s.ord(i)-1
         if idx == 0:  # Don't apply this equation at initial point
             raise IndexError("list index out of range")
         low = s.get_lower_element_boundary(i)
-        lowidx = tmp.index(low)
+        lowidx = s.ord(low)-1
         return sum(v(tmp[lowidx + j]) * adotdot[j][idx - lowidx] *
                    (1.0 / (tmp[lowidx + ncp] - tmp[lowidx]) ** 2)
                    for j in range(ncp + 1))
@@ -78,8 +76,8 @@ def _lagrange_legendre_transform(v, s):
     adot = s.get_discretization_info()['adot']
 
     def _fun(i):
-        tmp = sorted(s)
-        idx = tmp.index(i)
+        tmp = list(s)
+        idx = s.ord(i)-1
         if idx == 0:  # Don't apply this equation at initial point
             raise IndexError("list index out of range")
         elif i in s.get_finite_elements():  # Don't apply at finite element
@@ -87,7 +85,7 @@ def _lagrange_legendre_transform(v, s):
                                             # added later
             raise IndexError("list index out of range")
         low = s.get_lower_element_boundary(i)
-        lowidx = tmp.index(low)
+        lowidx = s.ord(low)-1
         return sum(v(tmp[lowidx + j]) * adot[j][idx - lowidx] *
                    (1.0 / (tmp[lowidx + ncp + 1] - tmp[lowidx]))
                    for j in range(ncp + 1))
@@ -99,8 +97,8 @@ def _lagrange_legendre_transform_order2(v, s):
     adotdot = s.get_discretization_info()['adotdot']
 
     def _fun(i):
-        tmp = sorted(s)
-        idx = tmp.index(i)
+        tmp = list(s)
+        idx = s.ord(i)-1
         if idx == 0:  # Don't apply this equation at initial point
             raise IndexError("list index out of range")
         elif i in s.get_finite_elements():  # Don't apply at finite element
@@ -108,7 +106,7 @@ def _lagrange_legendre_transform_order2(v, s):
                                             # added later
             raise IndexError("list index out of range")
         low = s.get_lower_element_boundary(i)
-        lowidx = tmp.index(low)
+        lowidx = s.ord(low)-1
         return sum(v(tmp[lowidx + j]) * adotdot[j][idx - lowidx] *
                    (1.0 / (tmp[lowidx + ncp + 1] - tmp[lowidx]) ** 2) \
                    for j in range(ncp + 1))
@@ -426,14 +424,14 @@ class Collocation_Discretization_Transformation(Transformation):
                 generate_finite_elements(ds, self._nfe[currentds])
                 if not ds.get_changed():
                     if len(ds) - 1 > self._nfe[currentds]:
-                        logger.warn("More finite elements were found in "
+                        logger.warning("More finite elements were found in "
                                     "ContinuousSet '%s' than the number of "
                                     "finite elements specified in apply. The "
                                     "larger number of finite elements will be "
                                     "used." % ds.name)
 
                 self._nfe[ds.name] = len(ds) - 1
-                self._fe[ds.name] = sorted(ds)
+                self._fe[ds.name] = list(ds)
                 generate_colloc_points(ds, self._tau[currentds])
                 # Adding discretization information to the continuousset
                 # object itself so that it can be accessed outside of the
@@ -501,34 +499,26 @@ class Collocation_Discretization_Transformation(Transformation):
 
             if block.contains_component(Integral):
                 for i in block.component_objects(Integral, descend_into=True):
-                    i.reconstruct()
                     i.parent_block().reclassify_component_type(i, Expression)
+                    # TODO: The following reproduces the old behavior of
+                    # "reconstruct()".  We should come up with an
+                    # implementation that does not rely on manipulating
+                    # private attributes
+                    i.clear()
+                    i._constructed = False
+                    i.construct()
                 # If a model contains integrals they are most likely to appear
                 # in the objective function which will need to be reconstructed
                 # after the model is discretized.
                 for k in block.component_objects(Objective, descend_into=True):
                     # TODO: check this, reconstruct might not work
-                    k.reconstruct()
-
-    def _get_idx(self, l, t, n, i, k):
-        """
-        This function returns the appropriate index for the ContinuousSet
-        and the derivative variables. It's needed because the collocation
-        constraints are indexed by finite element and collocation point
-        however a ContinuousSet contains a list of all the discretization
-        points and is not separated into finite elements and collocation
-        points.
-        """
-
-        tmp = t.index(t._fe[i])
-        tik = t[tmp + k]
-        if n is None:
-            return tik
-        else:
-            tmpn = n
-            if not isinstance(n, tuple):
-                tmpn = (n,)
-            return tmpn[0:l] + (tik,) + tmpn[l:]
+                    # TODO: The following reproduces the old behavior of
+                    # "reconstruct()".  We should come up with an
+                    # implementation that does not rely on manipulating
+                    # private attributes
+                    k.clear()
+                    k._constructed = False
+                    k.construct()
 
     def reduce_collocation_points(self, instance, var=None, ncp=None,
                                   contset=None):
@@ -603,11 +593,11 @@ class Collocation_Discretization_Transformation(Transformation):
             raise IndexError("ContinuousSet '%s' is not an indexing set of"
                              " the variable '%s'" % (ds.name, var.name))
         varidx = var.index_set()
-        if not hasattr(varidx, 'set_tuple'):
+        if not varidx.subsets():
             if ds is not varidx:
                 raise IndexError("ContinuousSet '%s' is not an indexing set of"
                                  " the variable '%s'" % (ds.name, var.name))
-        elif ds not in varidx.set_tuple:
+        elif ds not in varidx.subsets():
             raise IndexError("ContinuousSet '%s' is not an indexing set of the"
                              " variable '%s'" % (ds.name, var.name))
 
@@ -628,7 +618,7 @@ class Collocation_Discretization_Transformation(Transformation):
         instance.add_component(list_name, ConstraintList())
         conlist = instance.find_component(list_name)
 
-        t = sorted(ds)
+        t = list(ds)
         fe = ds._fe
         info = get_index_information(var, ds)
         tmpidx = info['non_ds']
@@ -637,22 +627,22 @@ class Collocation_Discretization_Transformation(Transformation):
         # Iterate over non_ds indices
         for n in tmpidx:
             # Iterate over finite elements
-            for i in xrange(0, len(fe) - 1):
+            for i in range(0, len(fe) - 1):
                 # Iterate over collocation points
-                for k in xrange(1, tot_ncp - ncp + 1):
+                for k in range(1, tot_ncp - ncp + 1):
                     if ncp == 1:
                         # Constant over each finite element
                         conlist.add(var[idx(n, i, k)] ==
                                     var[idx(n, i, tot_ncp)])
                     else:
-                        tmp = t.index(fe[i])
-                        tmp2 = t.index(fe[i + 1])
+                        tmp = ds.ord(fe[i])-1
+                        tmp2 = ds.ord(fe[i + 1])-1
                         ti = t[tmp + k]
                         tfit = t[tmp2 - ncp + 1:tmp2 + 1]
                         coeff = self._interpolation_coeffs(ti, tfit)
                         conlist.add(var[idx(n, i, k)] ==
                                     sum(var[idx(n, i, j)] * next(coeff)
-                                        for j in xrange(tot_ncp - ncp + 1,
+                                        for j in range(tot_ncp - ncp + 1,
                                                         tot_ncp + 1)))
 
         return instance

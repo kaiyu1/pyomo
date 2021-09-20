@@ -8,24 +8,24 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
+import json
 import os
 from os.path import abspath, dirname, join
-currdir = dirname(abspath(__file__))
 
-import pyutilib.th as unittest
-import pyutilib.services
+import pyomo.common.unittest as unittest
+
+from pyomo.common.fileutils import this_file_dir
+from pyomo.common.log import LoggingIntercept
+from pyomo.common.tempfiles import TempfileManager
 
 import pyomo.opt
-from pyomo.core import *
+from pyomo.core import (
+    ConcreteModel, RangeSet, Var, Param, Objective, ConstraintList,
+    value, minimize,
+)
 
-old_tempdir = None
-def setUpModule():
-    global old_tempdir
-    old_tempdir = pyutilib.services.TempfileManager.tempdir
-    pyutilib.services.TempfileManager.tempdir = currdir
-
-def tearDownModule():
-    pyutilib.services.TempfileManager.tempdir = old_tempdir
+currdir = this_file_dir()
+deleteFiles = True
 
 ipopt_available = False
 class Test(unittest.TestCase):
@@ -40,19 +40,14 @@ class Test(unittest.TestCase):
     def setUp(self):
         if not ipopt_available:
             self.skipTest("The 'ipopt' command is not available")
-        self.do_setup()
-
-    def do_setup(self):
-        global tmpdir
-        tmpdir = os.getcwd()
-        os.chdir(currdir)
-        pyutilib.services.TempfileManager.sequential_files(0)
+        TempfileManager.push()
 
         self.asl = pyomo.opt.SolverFactory('asl:ipopt', keepfiles=True)
         self.ipopt = pyomo.opt.SolverFactory('ipopt', keepfiles=True)
 
         # The sisser CUTEr instance
-        # Formulated in Pyomo by Carl D. Laird, Daniel P. Word, Brandon C. Barrera and Saumyajyoti Chaudhuri
+        # Formulated in Pyomo by Carl D. Laird, Daniel P. Word, Brandon
+        #     C. Barrera and Saumyajyoti Chaudhuri
         # Taken from:
 
         #   Source:
@@ -70,7 +65,8 @@ class Test(unittest.TestCase):
         sisser_instance = ConcreteModel()
 
         sisser_instance.N = RangeSet(1,2)
-        sisser_instance.xinit = Param(sisser_instance.N, initialize={ 1 : 1.0, 2 : 0.1})
+        sisser_instance.xinit = Param(
+            sisser_instance.N, initialize={ 1 : 1.0, 2 : 0.1})
 
         def fa(model, i):
             return value(model.xinit[i])
@@ -82,11 +78,16 @@ class Test(unittest.TestCase):
 
         self.sisser_instance = sisser_instance
 
+
     def tearDown(self):
-        global tmpdir
-        pyutilib.services.TempfileManager.clear_tempfiles()
-        pyutilib.services.TempfileManager.unique_files()
-        os.chdir(tmpdir)
+        TempfileManager.pop(remove=deleteFiles or self.currentTestPassed())
+
+    def compare_json(self, file1, file2):
+        with open(file1, 'r') as out, \
+            open(file2, 'r') as txt:
+            self.assertStructuredAlmostEqual(json.load(txt), json.load(out),
+                                             abstol=1e-7,
+                                             allow_second_superset=True)
 
     def test_version_asl(self):
         self.assertTrue(self.asl.version() is not None)
@@ -100,35 +101,35 @@ class Test(unittest.TestCase):
 
     def test_asl_solve_from_nl(self):
         # Test ipopt solve from nl file
+        _log = TempfileManager.create_tempfile(".test_ipopt.log")
         results = self.asl.solve(join(currdir, "sisser.pyomo.nl"),
-                                 logfile=join(currdir, "test_asl_solve_from_nl.log"),
+                                 logfile=_log,
                                  suffixes=['.*'])
         # We don't want the test to care about which Ipopt version we are using
         results.Solution(0).Message = "Ipopt"
         results.Solver.Message = "Ipopt"
-        results.write(filename=join(currdir, "test_asl_solve_from_nl.txt"),
+        _out = TempfileManager.create_tempfile(".test_ipopt.txt")
+        results.write(filename=_out,
                       times=False,
                       format='json')
-        self.assertMatchesJsonBaseline(join(currdir, "test_asl_solve_from_nl.txt"),
-                                       join(currdir, "test_solve_from_nl.baseline"),
-                                       tolerance=1e-7)
-        os.remove(join(currdir, "test_asl_solve_from_nl.log"))
+        self.compare_json(
+            _out, join(currdir, "test_solve_from_nl.baseline"))
 
     def test_ipopt_solve_from_nl(self):
         # Test ipopt solve from nl file
+        _log = TempfileManager.create_tempfile(".test_ipopt.log")
         results = self.ipopt.solve(join(currdir, "sisser.pyomo.nl"),
-                                   logfile=join(currdir, "test_ipopt_solve_from_nl.log"),
+                                   logfile=_log,
                                    suffixes=['.*'])
         # We don't want the test to care about which Ipopt version we are using
         results.Solution(0).Message = "Ipopt"
         results.Solver.Message = "Ipopt"
-        results.write(filename=join(currdir, "test_ipopt_solve_from_nl.txt"),
+        _out = TempfileManager.create_tempfile(".test_ipopt.txt")
+        results.write(filename=_out,
                       times=False,
                       format='json')
-        self.assertMatchesJsonBaseline(join(currdir, "test_ipopt_solve_from_nl.txt"),
-                                       join(currdir, "test_solve_from_nl.baseline"),
-                                       tolerance=1e-7)
-        os.remove(join(currdir, "test_ipopt_solve_from_nl.log"))
+        self.compare_json(
+            _out, join(currdir, "test_solve_from_nl.baseline"))
 
     def test_asl_solve_from_instance(self):
         # Test ipopt solve from a pyomo instance and load the solution
@@ -138,12 +139,12 @@ class Test(unittest.TestCase):
         self.sisser_instance.solutions.store_to(results)
         results.Solution(0).Message = "Ipopt"
         results.Solver.Message = "Ipopt"
-        results.write(filename=join(currdir, "test_asl_solve_from_instance.txt"),
+        _out = TempfileManager.create_tempfile(".test_ipopt.txt")
+        results.write(filename=_out,
                       times=False,
                       format='json')
-        self.assertMatchesJsonBaseline(join(currdir, "test_asl_solve_from_instance.txt"),
-                                       join(currdir, "test_solve_from_instance.baseline"),
-                                       tolerance=1e-7)
+        self.compare_json(
+            _out, join(currdir, "test_solve_from_instance.baseline"))
         #self.sisser_instance.load_solutions(results)
 
     def test_ipopt_solve_from_instance(self):
@@ -154,12 +155,12 @@ class Test(unittest.TestCase):
         self.sisser_instance.solutions.store_to(results)
         results.Solution(0).Message = "Ipopt"
         results.Solver.Message = "Ipopt"
-        results.write(filename=join(currdir, "test_ipopt_solve_from_instance.txt"),
+        _out = TempfileManager.create_tempfile(".test_ipopt.txt")
+        results.write(filename=_out,
                       times=False,
                       format='json')
-        self.assertMatchesJsonBaseline(join(currdir, "test_ipopt_solve_from_instance.txt"),
-                                       join(currdir, "test_solve_from_instance.baseline"),
-                                       tolerance=1e-7)
+        self.compare_json(
+            _out, join(currdir, "test_solve_from_instance.baseline"))
         #self.sisser_instance.load_solutions(results)
 
     def test_ipopt_solve_from_instance_OF_options(self):
@@ -173,24 +174,36 @@ class Test(unittest.TestCase):
                                       "option_file_name": "junk.opt"})
         # Creating a dummy ipopt.opt file in the cwd
         # will cover the code that prints a warning
-        assert os.getcwd() == currdir, str(os.getcwd())+" "+currdir
-        with open(join(currdir, 'ipopt.opt'), "w") as f:
-            pass
-        # Test ipopt solve from a pyomo instance and load the solution
-        results = self.ipopt.solve(self.sisser_instance,
-                                   suffixes=['.*'],
-                                   options={"OF_mu_init": 0.1})
-        os.remove(join(currdir, 'ipopt.opt'))
+        _cwd = os.getcwd()
+        tmpdir = TempfileManager.create_tempdir()
+        try:
+            os.chdir(tmpdir)
+            # create an empty ipopt.opt file
+            open(join(tmpdir, 'ipopt.opt'), "w").close()
+            # Test ipopt solve from a pyomo instance and load the solution
+            with LoggingIntercept() as LOG:
+                results = self.ipopt.solve(self.sisser_instance,
+                                           suffixes=['.*'],
+                                           options={"OF_mu_init": 0.1})
+            self.assertRegex(
+                LOG.getvalue().replace("\n", " "),
+                r"A file named (.*) exists in the current working "
+                r"directory, but Ipopt options file options \(i.e., "
+                r"options that start with 'OF_'\) were provided. The "
+                r"options file \1 will be ignored.")
+        finally:
+            os.chdir(_cwd)
+
         # We don't want the test to care about which Ipopt version we are using
         self.sisser_instance.solutions.store_to(results)
         results.Solution(0).Message = "Ipopt"
         results.Solver.Message = "Ipopt"
-        results.write(filename=join(currdir, "test_ipopt_solve_from_instance.txt"),
+        _out = TempfileManager.create_tempfile(".test_ipopt.txt")
+        results.write(filename=_out,
                       times=False,
                       format='json')
-        self.assertMatchesJsonBaseline(join(currdir, "test_ipopt_solve_from_instance.txt"),
-                                       join(currdir, "test_solve_from_instance.baseline"),
-                                       tolerance=1e-7)
+        self.compare_json(
+            _out, join(currdir, "test_solve_from_instance.baseline"))
         #self.sisser_instance.load_solutions(results)
 
     def test_bad_dof(self):
@@ -201,11 +214,11 @@ class Test(unittest.TestCase):
         m.c.add(m.x + m.y == 1)
         m.c.add(m.x - m.y == 0)
         m.c.add(2*m.x - 3*m.y == 1)
-        m.write('j.nl')
         res = self.ipopt.solve(m)
         self.assertEqual(str(res.solver.status), "warning")
         self.assertEqual(str(res.solver.termination_condition), "other")
         self.assertTrue("Too few degrees of freedom" in res.solver.message)
 
 if __name__ == "__main__":
+    deleteFiles = False
     unittest.main()

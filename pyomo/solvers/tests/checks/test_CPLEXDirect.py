@@ -10,10 +10,13 @@
 
 import sys
 
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 
-from pyomo.environ import *
-from pyomo.opt import *
+from pyomo.environ import (ConcreteModel, AbstractModel, Var, Objective,
+                           Block, Constraint, Suffix, NonNegativeIntegers,
+                           NonNegativeReals, Integers, Binary, is_fixed,
+                           value)
+from pyomo.opt import SolverFactory, TerminationCondition, SolutionStatus
 from pyomo.solvers.plugins.solvers.cplex_direct import (_CplexExpr,
                                                         _LinearConstraintData,
                                                         _VariableData)
@@ -149,7 +152,6 @@ class CPLEXDirectTests(unittest.TestCase):
                              SolutionStatus.optimal)
 
 
-@unittest.skipIf(not unittest.mock_available, "'mock' is not available")
 @unittest.skipIf(not cplexpy_available, "The 'cplex' python bindings are not available")
 class TestIsFixedCallCount(unittest.TestCase):
     """ Tests for PR#1402 (669e7b2b) """
@@ -300,7 +302,6 @@ class TestDataContainers(unittest.TestCase):
         self.assertEqual(solver_model.linear_constraints.get_num(), 4)
 
 
-@unittest.skipIf(not unittest.mock_available, "'mock' is not available")
 @unittest.skipIf(not cplexpy_available, "The 'cplex' python bindings are not available")
 class TestAddVar(unittest.TestCase):
     def test_add_single_variable(self):
@@ -403,7 +404,6 @@ class TestAddVar(unittest.TestCase):
         self.assertEqual(opt._solver_model.variables.get_num(), 3)
 
 
-@unittest.skipIf(not unittest.mock_available, "'mock' is not available")
 @unittest.skipIf(not cplexpy_available, "The 'cplex' python bindings are not available")
 class TestAddCon(unittest.TestCase):
     def test_add_single_constraint(self):
@@ -510,7 +510,6 @@ class TestAddCon(unittest.TestCase):
         self.assertEqual(opt._solver_model.linear_constraints.get_num(), 3)
 
 
-@unittest.skipIf(not unittest.mock_available, "'mock' is not available")
 @unittest.skipIf(not cplexpy_available, "The 'cplex' python bindings are not available")
 class TestLoadVars(unittest.TestCase):
     def setUp(self):

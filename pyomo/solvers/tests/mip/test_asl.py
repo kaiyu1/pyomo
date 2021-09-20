@@ -8,32 +8,31 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
+import json
 import os
-from os.path import abspath, dirname
-pyomodir = dirname(abspath(__file__))+os.sep+".."+os.sep+".."+os.sep
-currdir = dirname(abspath(__file__))+os.sep
+from os.path import join
+from filecmp import cmp
 
-import pyutilib.th as unittest
-import pyutilib.services
-import pyutilib.common
+import pyomo.common.unittest as unittest
+
+import pyomo.common
+from pyomo.common.fileutils import this_file_dir
+from pyomo.common.tempfiles import TempfileManager
 
 from pyomo.core import ConcreteModel
-import pyomo.opt
-from pyomo.opt import ResultsFormat, ProblemFormat
+from pyomo.opt import ResultsFormat, SolverResults, SolverFactory
+
+currdir = this_file_dir()
+deleteFiles = True
 
 old_ignore_time = None
-old_tempdir = None
 def setUpModule():
-    global old_tempdir
     global old_ignore_time
-    old_tempdir = pyutilib.services.TempfileManager.tempdir
-    old_ignore_time = pyomo.opt.SolverResults.default_print_options.ignore_time
-    pyomo.opt.SolverResults.default_print_options.ignore_time = True
-    pyutilib.services.TempfileManager.tempdir = currdir
+    old_ignore_time = SolverResults.default_print_options.ignore_time
+    SolverResults.default_print_options.ignore_time = True
 
 def tearDownModule():
-    pyutilib.services.TempfileManager.tempdir = old_tempdir
-    pyomo.opt.SolverResults.default_print_options.ignore_time = old_ignore_time
+    SolverResults.default_print_options.ignore_time = old_ignore_time
 
 cplexamp_available = False
 class mock_all(unittest.TestCase):
@@ -49,22 +48,16 @@ class mock_all(unittest.TestCase):
         self.do_setup(False)
 
     def do_setup(self,flag):
-        global tmpdir
-        tmpdir = os.getcwd()
-        os.chdir(currdir)
-        pyutilib.services.TempfileManager.sequential_files(0)
+        TempfileManager.push()
         if flag:
             if not cplexamp_available:
                 self.skipTest("The 'cplexamp' command is not available")
-            self.asl = pyomo.opt.SolverFactory('asl:cplexamp')
+            self.asl = SolverFactory('asl:cplexamp')
         else:
-            self.asl = pyomo.opt.SolverFactory('_mock_asl:cplexamp')
+            self.asl = SolverFactory('_mock_asl:cplexamp')
 
     def tearDown(self):
-        global tmpdir
-        pyutilib.services.TempfileManager.clear_tempfiles()
-        pyutilib.services.TempfileManager.unique_files()
-        os.chdir(tmpdir)
+        TempfileManager.pop(remove=deleteFiles or self.currentTestPassed())
         self.asl = None
 
     def test_path(self):
@@ -75,18 +68,18 @@ class mock_all(unittest.TestCase):
 
     def test_solve4(self):
         """ Test ASL - test4.nl """
-        results = self.asl.solve(currdir+"test4.nl",
-                                 logfile=currdir+"test_solve4.log",
+        _log = TempfileManager.create_tempfile(".test_solve4.log")
+        _out = TempfileManager.create_tempfile(".test_solve4.txt")
+
+        results = self.asl.solve(join(currdir, "test4.nl"),
+                                 logfile=_log,
                                  suffixes=['.*'])
-        results.write(filename=currdir+"test_solve4.txt",
-                      times=False,
-                      format='json')
-        self.assertMatchesJsonBaseline(currdir+"test_solve4.txt",
-                                       currdir+"test4_asl.txt",
-                                       tolerance=1e-4)
-        os.remove(currdir+"test_solve4.log")
-        if os.path.exists(currdir+"test4.soln"):
-            os.remove(currdir+"test4.soln")
+        results.write(filename=_out, times=False, format='json')
+        _baseline = join(currdir, "test4_asl.txt")
+        with open(_out, 'r') as out, open(_baseline, 'r') as txt:
+            self.assertStructuredAlmostEqual(json.load(txt), json.load(out),
+                                             abstol=1e-4,
+                                             allow_second_superset=True)
 
     #
     # This test is disabled, but it's useful for interactively exercising
@@ -100,8 +93,9 @@ class mock_all(unittest.TestCase):
                                  suffixes=['.*'])
         results.write(filename=currdir+"test_options.txt",
                       times=False)
-        self.assertFileEqualsBaseline(currdir+"test_options.txt",
-                                      currdir+  "test4_asl.txt")
+        _out, _log = join(currdir, "test_options.txt"), join(currdir, "test4_asl.txt")
+        self.assertTrue(cmp(_out, _log),
+                        msg="Files %s and %s differ" % (_out, _log))
         #os.remove(currdir+"test4.sol")
         #os.remove(currdir+"test_solve4.log")
 
@@ -142,4 +136,5 @@ class mip_all(mock_all):
 
 
 if __name__ == "__main__":
+    deleteFiles = False
     unittest.main()

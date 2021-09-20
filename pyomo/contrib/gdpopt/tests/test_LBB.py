@@ -3,9 +3,9 @@
 from math import fabs
 from os.path import abspath, dirname, join, normpath
 
-import pyutilib.th as unittest
-from pyutilib.misc import import_file
+import pyomo.common.unittest as unittest
 
+from pyomo.common.fileutils import import_file
 from pyomo.contrib.satsolver.satsolver import z3_available
 from pyomo.environ import SolverFactory, value, ConcreteModel, Var, Objective, maximize
 from pyomo.gdp import Disjunction
@@ -87,6 +87,7 @@ class TestGDPopt_LBB(unittest.TestCase):
             fabs(value(strip_pack.total_length.expr) - 11) <= 1E-2)
 
     @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
+    @unittest.category('expensive')
     def test_LBB_constrained_layout(self):
         """Test LBB with constrained layout."""
         exfile = import_file(
@@ -186,6 +187,7 @@ class TestGDPopt_LBB_Z3(unittest.TestCase):
             fabs(value(strip_pack.total_length.expr) - 11) <= 1E-2)
 
     @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
+    @unittest.category('expensive')
     def test_LBB_constrained_layout(self):
         """Test LBB with constrained layout."""
         exfile = import_file(

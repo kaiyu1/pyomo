@@ -18,10 +18,6 @@ Optimization: Unifying framework and Extensions (Vielma, \
 Nemhauser 2008)
 """
 
-# ****** NOTE: Nothing in this file relies on integer division *******
-#              I predict this will save numerous headaches as
-#              well as gratuitous calls to float() in this code
-from __future__ import division
 import logging
 import bisect
 
@@ -39,8 +35,7 @@ from pyomo.core.kernel.variable import (IVariable,
                                         variable_tuple,
                                         variable_dict,
                                         variable)
-from pyomo.core.kernel.constraint import (constraint,
-                                          constraint_list,
+from pyomo.core.kernel.constraint import (constraint_list,
                                           constraint_tuple,
                                           linear_constraint)
 from pyomo.core.kernel.sos import sos2
@@ -52,8 +47,6 @@ from pyomo.core.kernel.piecewise_library.util import \
      generate_gray_code,
      PiecewiseValidationError)
 
-import six
-from six.moves import xrange, zip
 
 logger = logging.getLogger('pyomo.core')
 
@@ -307,7 +300,7 @@ class PiecewiseLinearFunction(object):
                 % (str(breakpoints)))
 
         ftype, slopes = characterize_function(breakpoints, values)
-        for i in xrange(1, len(slopes)):
+        for i in range(1, len(slopes)):
             if (slopes[i-1] is not None) and \
                (slopes[i] is not None) and \
                (abs(slopes[i-1] - slopes[i]) <= equal_slopes_tolerance):
@@ -549,7 +542,7 @@ class piecewise_convex(TransformedPiecewiseLinearFunction):
         breakpoints = self.breakpoints
         values = self.values
         self.c = constraint_list()
-        for i in xrange(len(breakpoints)-1):
+        for i in range(len(breakpoints)-1):
             X0 = breakpoints[i]
             F_AT_X0 = values[i]
             dF_AT_X0 = (values[i+1] - F_AT_X0) / \
@@ -629,7 +622,7 @@ class piecewise_sos2(TransformedPiecewiseLinearFunction):
 
         # create vars
         y_tuple = tuple(variable(lb=0)
-                        for i in xrange(len(self.breakpoints)))
+                        for i in range(len(self.breakpoints)))
         y = self.v = variable_tuple(y_tuple)
 
         # create piecewise constraints
@@ -685,7 +678,7 @@ class piecewise_dcc(TransformedPiecewiseLinearFunction):
         polytopes = range(len(self.breakpoints)-1)
         vertices = range(len(self.breakpoints))
         def polytope_verts(p):
-            return xrange(p,p+2)
+            return range(p,p+2)
 
         # create vars
         self.v = variable_dict()
@@ -1033,7 +1026,7 @@ class piecewise_dlog(TransformedPiecewiseLinearFunction):
         polytopes = range(len(breakpoints)-1)
         vertices = range(len(breakpoints))
         def polytope_verts(p):
-            return xrange(p,p+2)
+            return range(p,p+2)
 
         # create vars
         self.v = variable_dict()
@@ -1107,7 +1100,7 @@ class piecewise_dlog(TransformedPiecewiseLinearFunction):
             step = N//(2**i)
             tmp = []
             while start < N:
-                tmp.extend(j-1 for j in xrange(start,start+step))
+                tmp.extend(j-1 for j in range(start,start+step))
                 start += 2*step
             B_LEFT.append(tmp)
 
@@ -1218,10 +1211,10 @@ class piecewise_log(TransformedPiecewiseLinearFunction):
         N = 2**n
         S = range(n)
         G = generate_gray_code(n)
-        L = tuple([k for k in xrange(N+1)
+        L = tuple([k for k in range(N+1)
                    if ((k == 0) or (G[k-1][s] == 1))
                    and ((k == N) or (G[k][s] == 1))] for s in S)
-        R = tuple([k for k in xrange(N+1)
+        R = tuple([k for k in range(N+1)
                    if ((k == 0) or (G[k-1][s] == 0))
                    and ((k == N) or (G[k][s] == 0))] for s in S)
         return S, L, R

@@ -1,25 +1,32 @@
-import pyomo.environ
-from pyomo.core import *
-from pyomo.gdp import *
-from pyomo.opt import SolverFactory
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and 
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain 
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
+
+from pyomo.core import TransformationFactory, Var, NonNegativeReals, Constraint, Objective, Block, value
 
 from pyomo.common.modeling import unique_component_name
 from pyomo.core.plugins.transform.hierarchy import NonIsomorphicTransformation
 from pyomo.common.config import ConfigBlock, ConfigValue
-from pyomo.core.base.component import ComponentUID
-from pyomo.core.base import Constraint, _ConstraintData
+from pyomo.core.base import ComponentUID
+from pyomo.core.base.constraint import _ConstraintData
 from pyomo.common.deprecation import deprecation_warning
 
 NAME_BUFFER = {}
 
 def target_list(x):
     deprecation_msg = ("In future releases ComponentUID targets will no "
-                      "longer be supported in the core.add_slack_variables "
-                      "transformation. Specify targets as a Constraint or "
-                      "list of Constraints.")
+                       "longer be supported in the core.add_slack_variables "
+                       "transformation. Specify targets as a Constraint or "
+                       "list of Constraints.")
     if isinstance(x, ComponentUID):
         if deprecation_msg:
-            deprecation_warning(deprecation_msg)
+            deprecation_warning(deprecation_msg, version='5.7.1')
             # only emit the message once
             deprecation_msg = None
         # [ESJ 07/15/2020] We have to just pass it through because we need the
@@ -32,7 +39,7 @@ def target_list(x):
         for i in x:
             if isinstance(i, ComponentUID):
                 if deprecation_msg:
-                    deprecation_warning(deprecation_msg)
+                    deprecation_warning(deprecation_msg, version='5.7.1')
                     deprecation_msg = None
                 # same as above...
                 ans.append(i)
@@ -41,12 +48,15 @@ def target_list(x):
             else:
                 raise ValueError(
                     "Expected Constraint or list of Constraints."
-                    "\n\tRecieved %s" % (type(i),))
+                    "\n\tReceived %s" % (type(i),))
         return ans
     else:
         raise ValueError(
             "Expected Constraint or list of Constraints."
-            "\n\tRecieved %s" % (type(x),))
+            "\n\tReceived %s" % (type(x),))
+
+import logging
+logger = logging.getLogger('pyomo.core')
 
 
 @TransformationFactory.register('core.add_slack_variables', \

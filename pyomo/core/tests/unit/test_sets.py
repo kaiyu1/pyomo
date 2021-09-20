@@ -30,17 +30,25 @@ import copy
 import itertools
 import os
 from os.path import abspath, dirname
-from six import StringIO, iterkeys
+from io import StringIO
 
 currdir = dirname(abspath(__file__))+os.sep
 
-from pyutilib.misc import flatten_tuple as pyutilib_misc_flatten_tuple
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 
 import pyomo.core.base
-from pyomo.environ import *
+from pyomo.core.base.util import flatten_tuple
+from pyomo.environ import (Set, SetOf, RangeSet, Param, ConcreteModel, 
+                           AbstractModel, Expression, EmptySet,
+                           NonPositiveIntegers,
+                           NonPositiveReals, PositiveReals, NegativeReals, 
+                           IntegerSet, NegativeIntegers, 
+                           PositiveIntegers, RealSet, BooleanSet, 
+                           IntegerInterval, RealInterval, Binary,
+                           PercentFraction, UnitInterval, NonNegativeIntegers,
+                           Integers, NonNegativeReals, Boolean, Reals, 
+                           Any, value, set_options, simple_set_rule)
 from pyomo.core.base.set import _AnySet, RangeDifferenceError
-from pyomo.core.base.component import CloneError
 
 _has_numpy = False
 try:
@@ -962,7 +970,7 @@ class ArraySet(PyomoModel):
         #     pass
         # else:
         #     self.fail("Set arrays do not have a virtual data element")
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 AttributeError, ".*no attribute 'virtual'"):
             self.instance.A.virtual
 
@@ -1055,64 +1063,38 @@ class ArraySet(PyomoModel):
 
     def test_or(self):
         """Check that set union works"""
-        # In the set rewrite, the following now works!
-        # try:
-        #     self.instance.A | self.instance.tmpset3
-        # except TypeError:
-        #     pass
-        # else:
-        #     self.fail("fail test_or")
-        self.assertEqual(self.instance.A | self.instance.tmpset3,
-                         self.instance.A)
+        with self.assertRaisesRegex(
+                TypeError, r'Cannot apply a Set operator to an indexed Set '
+                r'component \(A\)'):
+            self.instance.A | self.instance.tmpset3
 
     def test_and(self):
         """Check that set intersection works"""
-        # In the set rewrite, the following now works!
-        # try:
-        #     self.instance.tmp = self.instance.A & self.instance.tmpset3
-        # except TypeError:
-        #     pass
-        # else:
-        #     self.fail("fail test_and")
-        self.assertEqual(self.instance.A & self.instance.tmpset3,
-                         EmptySet)
+        with self.assertRaisesRegex(
+                TypeError, r'Cannot apply a Set operator to an indexed Set '
+                r'component \(A\)'):
+            self.instance.A & self.instance.tmpset3
 
     def test_xor(self):
         """Check that set exclusive or works"""
-        # In the set rewrite, the following now works!
-        # try:
-        #     self.instance.A ^ self.instance.tmpset3
-        # except TypeError:
-        #     pass
-        # else:
-        #     self.fail("fail test_xor")
-        self.assertEqual(self.instance.A ^ self.instance.tmpset3,
-                         self.instance.A)
+        with self.assertRaisesRegex(
+                TypeError, r'Cannot apply a Set operator to an indexed Set '
+                r'component \(A\)'):
+            self.instance.A ^ self.instance.tmpset3
 
     def test_diff(self):
         """Check that set difference works"""
-        # In the set rewrite, the following now works!
-        # try:
-        #     self.instance.A - self.instance.tmpset3
-        # except TypeError:
-        #     pass
-        # else:
-        #     self.fail("fail test_diff")
-        self.assertEqual(self.instance.A - self.instance.tmpset3,
-                         self.instance.A)
+        with self.assertRaisesRegex(
+                TypeError, r'Cannot apply a Set operator to an indexed Set '
+                r'component \(A\)'):
+            self.instance.A - self.instance.tmpset3
 
     def test_mul(self):
         """Check that set cross-product works"""
-        # In the set rewrite, the following now works!
-        # try:
-        #     self.instance.A * self.instance.tmpset3
-        # except TypeError:
-        #     pass
-        # else:
-        #     self.fail("fail test_mul")
-        # Note: cross product with an empty set is an empty set
-        self.assertEqual(self.instance.A * self.instance.tmpset3,
-                         [])
+        with self.assertRaisesRegex(
+                TypeError, r'Cannot apply a Set operator to an indexed Set '
+                r'component \(A\)'):
+            self.instance.A * self.instance.tmpset3
 
     def test_override_values(self):
         m = ConcreteModel()
@@ -1507,7 +1489,8 @@ class TestRealSet(unittest.TestCase):
 
     def test_RealInterval(self):
         x = RealInterval()
-        self.assertEqual(x.name, "RealInterval(None, None)")
+        self.assertEqual(x.name, "'RealInterval(None, None)'")
+        self.assertEqual(x.local_name, "RealInterval(None, None)")
         self.assertFalse(None in x)
         self.assertTrue(10 in x)
         self.assertTrue(1.1 in x)
@@ -1520,7 +1503,8 @@ class TestRealSet(unittest.TestCase):
         self.assertTrue(-10 in x)
 
         x = RealInterval(bounds=(-1,1))
-        self.assertEqual(x.name, "RealInterval(-1, 1)")
+        self.assertEqual(x.name, "'RealInterval(-1, 1)'")
+        self.assertEqual(x.local_name, "RealInterval(-1, 1)")
         self.assertFalse(10 in x)
         self.assertFalse(1.1 in x)
         self.assertTrue(1 in x)
@@ -1660,7 +1644,8 @@ class TestIntegerSet(unittest.TestCase):
     def test_IntegerInterval(self):
         x = IntegerInterval()
         self.assertFalse(None in x)
-        self.assertEqual(x.name, "IntegerInterval(None, None)")
+        self.assertEqual(x.name, "'IntegerInterval(None, None)'")
+        self.assertEqual(x.local_name, "IntegerInterval(None, None)")
         self.assertTrue(10 in x)
         self.assertFalse(1.1 in x)
         self.assertTrue(1 in x)
@@ -1673,7 +1658,8 @@ class TestIntegerSet(unittest.TestCase):
 
         x = IntegerInterval(bounds=(-1,1))
         self.assertFalse(None in x)
-        self.assertEqual(x.name, "IntegerInterval(-1, 1)")
+        self.assertEqual(x.name, "'IntegerInterval(-1, 1)'")
+        self.assertEqual(x.local_name, "IntegerInterval(-1, 1)")
         self.assertFalse(10 in x)
         self.assertFalse(1.1 in x)
         self.assertTrue(1 in x)
@@ -1846,7 +1832,7 @@ class TestAnySet(SimpleSetA):
         #     pass
         # else:
         #     self.fail("test_len failure")
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 TypeError, "object of type 'Any' has no len()"):
             len(self.instance.A)
 
@@ -2121,13 +2107,13 @@ class TestSetArgs1(PyomoModel):
         # except ValueError:
         #     pass
         instance = self.model.create_instance()
-        self.assertEquals(len(instance.B), 6)
-        self.assertEquals(instance.B[0,1,0,False], [])
-        self.assertEquals(instance.B[0,1,0,True], [0,1])
-        self.assertEquals(instance.B[1,2,1,False], [])
-        self.assertEquals(instance.B[1,2,1,True], [1,2])
-        self.assertEquals(instance.B[2,3,4,False], [])
-        self.assertEquals(instance.B[2,3,4,True], [2,3])
+        self.assertEqual(len(instance.B), 6)
+        self.assertEqual(instance.B[0,1,0,False], [])
+        self.assertEqual(instance.B[0,1,0,True], [0,1])
+        self.assertEqual(instance.B[1,2,1,False], [])
+        self.assertEqual(instance.B[1,2,1,True], [1,2])
+        self.assertEqual(instance.B[2,3,4,False], [])
+        self.assertEqual(instance.B[2,3,4,True], [2,3])
 
     def test_initialize9(self):
         self.model.A = Set(initialize=range(0,3))
@@ -2713,12 +2699,10 @@ class TestSetsInPython3(unittest.TestCase):
         buf = StringIO()
         m3.pprint(ostream=buf)
         self.assertEqual(ref, buf.getvalue())
-        #
-        # six.iterkeys()
-        #
+
         m = ConcreteModel()
         v = {1:2,3:4,5:6}
-        m.INDEX = Set(initialize=iterkeys(v))
+        m.INDEX = Set(initialize=v.keys())
         m.p = Param(m.INDEX, initialize=v)
         buf = StringIO()
         m.pprint(ostream=buf)
@@ -2792,7 +2776,7 @@ class TestSetIO(PyomoModel):
         self.model.A = Set()
         self.model.B = Set()
         self.model.C = self.model.A * self.model.B
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 ValueError, "SetOperator C with incompatible data"):
             self.instance = self.model.create_instance(currdir+"setA.dat")
 
@@ -2992,8 +2976,10 @@ class TestSetErrors(PyomoModel):
         #     pass
         a=Set()
         b=Set(a)
-        with self.assertRaisesRegexp(
-                TypeError, "Cannot apply a Set operator to an indexed"):
+        with self.assertRaisesRegex(
+                #TypeError, "Cannot apply a Set operator to an indexed"):
+                ValueError, "Error retrieving component IndexedSet\[None\]: "
+                "The component has not been constructed."):
             c=Set(within=b, dimen=2)
             c.construct()
 
@@ -3069,7 +3055,7 @@ class TestSetErrors(PyomoModel):
         #     self.fail("test_construct - expected failure constructing with a dictionary")
         # except ValueError:
         #     pass
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 KeyError, "Cannot treat the scalar component '[^']*' "
                 "as an indexed component"):
             a.construct()
@@ -3113,11 +3099,11 @@ class TestSetErrors(PyomoModel):
         #     pass
         # except IndexError:
         #     pass
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 RuntimeError, ".*before it has been constructed"):
             a[0]
         a.construct()
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 IndexError, "Pyomo Sets are 1-indexed"):
             a[0]
         self.assertEqual(a[1], 2)
@@ -3304,10 +3290,10 @@ class TestSetErrors(PyomoModel):
         X = Reals ^ Integers
         self.assertIn(0.5, X)
         self.assertNotIn(1, X)
-        with self.assertRaisesRegexp(
-                RangeDifferenceError, "We do not support subtracting an "
-                "infinite discrete range \[0:None\] from an infinite "
-                "continuous range \[None..None\]"):
+        with self.assertRaisesRegex(
+                RangeDifferenceError, r"We do not support subtracting an "
+                r"infinite discrete range \[0:None\] from an infinite "
+                r"continuous range \[None..None\]"):
             X < Reals
         # In the set rewrite, the following now works!
         # try:
@@ -3337,10 +3323,10 @@ class TestSetErrors(PyomoModel):
         X = Reals - Integers
         self.assertIn(0.5, X)
         self.assertNotIn(1, X)
-        with self.assertRaisesRegexp(
-                RangeDifferenceError, "We do not support subtracting an "
-                "infinite discrete range \[0:None\] from an infinite "
-                "continuous range \[None..None\]"):
+        with self.assertRaisesRegex(
+                RangeDifferenceError, r"We do not support subtracting an "
+                r"infinite discrete range \[0:None\] from an infinite "
+                r"continuous range \[None..None\]"):
             X < Reals
         # In the set rewrite, the following now works!
         # try:
@@ -3420,7 +3406,7 @@ class TestSetErrors(PyomoModel):
         #     self.fail("test_arrayset_construct - expected ValueError")
         # except ValueError:
         #     pass
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 TypeError, "'int' object is not iterable"):
             b.construct()
 
@@ -3624,19 +3610,19 @@ class TestNestedSetOperations(unittest.TestCase):
 
         self.assertTrue(isinstance(inst.product1,
                                    pyomo.core.base.set.SetProduct))
-        prod1 = set([pyutilib_misc_flatten_tuple(i) \
+        prod1 = set([flatten_tuple(i) \
                      for i in set( p(s1,p(s2,p(s3,p(s3,s2)))) )])
         self.assertEqual(sorted(inst.product1),
                          sorted(prod1))
         self.assertTrue(isinstance(inst.product2,
                                    pyomo.core.base.set.SetProduct))
-        prod2 = set([pyutilib_misc_flatten_tuple(i) \
+        prod2 = set([flatten_tuple(i) \
                      for i in  set( p(s1,p(s2,p(s3,p(s3,s2)))) )])
         self.assertEqual(sorted(inst.product2),
                          sorted(prod2))
         self.assertTrue(isinstance(inst.product3,
                                    pyomo.core.base.set.SetProduct))
-        prod3 = set([pyutilib_misc_flatten_tuple(i) \
+        prod3 = set([flatten_tuple(i) \
                      for i in set( p(p(p(p(s1,s2),s3),s3),s2) )])
         self.assertEqual(sorted(inst.product3),
                          sorted(prod3))

@@ -6,20 +6,14 @@
 #  the U.S. Government retains certain rights in this software.
 #  This software is distributed under the BSD License.
 #  _________________________________________________________________________
-from pyomo.core.base import Constraint, Param, Var, value, Suffix, Block
+from pyomo.core.base import Constraint, Param, value, Suffix, Block
 
 from pyomo.dae import ContinuousSet, DerivativeVar
 from pyomo.dae.diffvar import DAE_Error
 
 from pyomo.core.expr import current as EXPR
-from pyomo.core.expr.numvalue import (
-    NumericValue, native_numeric_types, nonpyomo_leaf_types,
-)
+from pyomo.core.expr.numvalue import native_numeric_types
 from pyomo.core.expr.template_expr import IndexTemplate, _GetItemIndexer
-from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
-from pyomo.core.base.reference import Reference
-
-from six import iterkeys, itervalues
 
 import logging
 
@@ -27,7 +21,7 @@ __all__ = ('Simulator', )
 logger = logging.getLogger('pyomo.core')
 
 from pyomo.common.dependencies import (
-    numpy as np, numpy_available, attempt_import,
+    numpy as np, numpy_available, scipy, scipy_available, attempt_import,
 )
 
 # Check integrator availability
@@ -42,8 +36,6 @@ from pyomo.common.dependencies import (
 #     scipy_available = False
 import platform
 is_pypy = platform.python_implementation() == "PyPy"
-
-scipy, scipy_available = attempt_import('scipy.integrate', alt_names=['scipy'])
 
 casadi_intrinsic = {}
 def _finalize_casadi(casadi, available):
@@ -626,7 +618,7 @@ class Simulator:
         # parameters
         algvars = []
 
-        for item in iterkeys(templatemap):
+        for item in templatemap.keys():
             if item.base.name in derivs:
                 # Make sure there are no DerivativeVars in the
                 # template map
@@ -921,9 +913,8 @@ class Simulator:
                              varying_inputs, integrator,
                              integrator_options):
 
-        scipyint = \
-            scipy.ode(self._rhsfun).set_integrator(integrator,
-                                                   **integrator_options)
+        scipyint = scipy.integrate.ode(self._rhsfun).set_integrator(
+            integrator, **integrator_options)
         scipyint.set_initial_value(initcon, tsim[0])
 
         profile = np.array(initcon)

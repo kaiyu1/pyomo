@@ -20,9 +20,6 @@ from pyomo.core.kernel.base import \
      _no_ctype,
      _convert_ctype,
      _convert_descend_into)
-from pyomo.core.kernel.block import block
-
-import six
 
 def preorder_traversal(node,
                        ctype=_no_ctype,
@@ -163,7 +160,7 @@ def generate_names(node,
 
     # skip the root object
     try:
-        six.next(traversal)
+        next(traversal)
     except StopIteration:
         # might be an empty traversal
         return names

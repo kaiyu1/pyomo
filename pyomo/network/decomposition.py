@@ -14,12 +14,10 @@ from pyomo.network import Port, Arc
 from pyomo.network.foqus_graph import FOQUSGraph
 from pyomo.core import Constraint, value, Objective, Var, ConcreteModel, \
     Binary, minimize, Expression
-from pyomo.common.collections import ComponentSet, ComponentMap
+from pyomo.common.collections import ComponentSet, ComponentMap, Bunch
 from pyomo.core.expr.current import identify_variables
 from pyomo.repn import generate_standard_repn
-from pyutilib.misc import Options
-import copy, logging, time
-from six import iteritems, itervalues
+import logging, time
 
 from pyomo.common.dependencies import (
     networkx as nx, networkx_available,
@@ -147,7 +145,7 @@ class SequentialDecomposition(FOQUSGraph):
     def __init__(self, **kwds):
         """Pass kwds to update the options attribute after setting defaults"""
         self.cache = {}
-        options = self.options = Options()
+        options = self.options = Bunch()
         # defaults
         options["graph"] = None
         options["tear_set"] = None
@@ -282,10 +280,21 @@ class SequentialDecomposition(FOQUSGraph):
             old_log_level = logger.level
             logger.setLevel(logging.INFO)
 
+        self.cache.clear()
+
+        try:
+            return self._run_impl(model, function)
+        finally:
+            # Cleanup
+            self.cache.clear()
+
+            if self.options["log_info"]:
+                logger.setLevel(old_log_level)
+
+
+    def _run_impl(self, model, function):
         start = time.time()
         logger.info("Starting Sequential Decomposition")
-
-        self.cache.clear()
 
         G = self.options["graph"]
         if G is None:
@@ -339,14 +348,9 @@ class SequentialDecomposition(FOQUSGraph):
                     raise ValueError(
                         "Invalid tear_method '%s'" % (tear_method,))
 
-        self.cache.clear()
-
         end = time.time()
         logger.info("Finished Sequential Decomposition in %.2f seconds" %
             (end - start))
-
-        if self.options["log_info"]:
-            logger.setLevel(old_log_level)
 
     def run_order(self, G, order, function, ignore=None, use_guesses=False):
         """
@@ -369,6 +373,7 @@ class SequentialDecomposition(FOQUSGraph):
         fixed_inputs = self.fixed_inputs()
         fixed_outputs = ComponentSet()
         edge_map = self.edge_to_idx(G)
+        arc_map = self.arc_to_edge(G)
         guesses = self.options["guesses"]
         default = self.options["default_guess"]
         for lev in order:
@@ -401,8 +406,9 @@ class SequentialDecomposition(FOQUSGraph):
                         fixed_outputs.add(var)
                         var.fix()
                     for arc in dests:
-                        arc_map = self.arc_to_edge(G)
-                        if edge_map[arc_map[arc]] not in ignore:
+                        # arc might not be in the arc_map if
+                        # it is on a deactivated block
+                        if arc in arc_map and edge_map[arc_map[arc]] not in ignore:
                             self.pass_values(arc, fixed_inputs)
                     for var in fixed_outputs:
                         var.free()
@@ -450,7 +456,7 @@ class SequentialDecomposition(FOQUSGraph):
             # (via set_split_fraction or something else) that will be used here
             # and is only relevant to this SM, and if they didn't specify
             # anything, throw an error.
-            for name, mem in iteritems(src.vars):
+            for name, mem in src.vars.items():
                 if not src.is_extensive(name):
                     continue
                 evar = eblock.component(name)
@@ -541,7 +547,7 @@ class SequentialDecomposition(FOQUSGraph):
 
     def load_guesses(self, guesses, port, fixed):
         srcs = port.sources()
-        for name, mem in iteritems(port.vars):
+        for name, mem in port.vars.items():
             try:
                 entry = guesses[port][name]
             except KeyError:
@@ -574,7 +580,7 @@ class SequentialDecomposition(FOQUSGraph):
                             break
                         has_evars = True
                         # even if idx is None, we know evar is a Var and
-                        # indexing by None into SimpleVars returns itself
+                        # indexing by None into ScalarVars returns itself
                         evar = evar[idx]
                         if evar.is_fixed():
                             # silently ignore vars already fixed
@@ -700,17 +706,18 @@ class SequentialDecomposition(FOQUSGraph):
         """
         G = nx.MultiDiGraph()
 
-        for arc in model.component_data_objects(Arc):
-            if not arc.directed:
-                raise ValueError("All Arcs must be directed when creating "
-                                 "a graph for a model. Found undirected "
-                                 "Arc: '%s'" % arc.name)
-            if arc.expanded_block is None:
-                raise ValueError("All Arcs must be expanded when creating "
-                                 "a graph for a model. Found unexpanded "
-                                 "Arc: '%s'" % arc.name)
-            src, dest = arc.src.parent_block(), arc.dest.parent_block()
-            G.add_edge(src, dest, arc=arc)
+        for blk in model.block_data_objects(descend_into=True, active=True):
+            for arc in blk.component_data_objects(Arc, descend_into=False):
+                if not arc.directed:
+                    raise ValueError("All Arcs must be directed when creating "
+                                     "a graph for a model. Found undirected "
+                                     "Arc: '%s'" % arc.name)
+                if arc.expanded_block is None:
+                    raise ValueError("All Arcs must be expanded when creating "
+                                     "a graph for a model. Found unexpanded "
+                                     "Arc: '%s'" % arc.name)
+                src, dest = arc.src.parent_block(), arc.dest.parent_block()
+                G.add_edge(src, dest, arc=arc)
 
         return G
 

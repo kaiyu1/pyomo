@@ -117,7 +117,7 @@ class ParallelTaskManager:
             local_data = OrderedDict()
             assert (len(global_data) == self._n_total_tasks)
             idx = 0
-            for k,v in six.iteritems(global_data):
+            for k, v in global_data.items():
                 if idx in self._local_map:
                     local_data[k] = v
                 idx += idx

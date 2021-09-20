@@ -1,172 +1,197 @@
-# -*- coding: utf-8 -*-
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
+
 """Tests for the MindtPy solver."""
-from math import fabs
 import pyomo.core.base.symbolic
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 from pyomo.contrib.mindtpy.tests.eight_process_problem import \
     EightProcessFlowsheet
 from pyomo.contrib.mindtpy.tests.MINLP_simple import SimpleMINLP as SimpleMINLP
 from pyomo.contrib.mindtpy.tests.MINLP2_simple import SimpleMINLP as SimpleMINLP2
 from pyomo.contrib.mindtpy.tests.MINLP3_simple import SimpleMINLP as SimpleMINLP3
+from pyomo.contrib.mindtpy.tests.MINLP5_simple import SimpleMINLP5
 from pyomo.contrib.mindtpy.tests.from_proposal import ProposalModel
 from pyomo.contrib.mindtpy.tests.constraint_qualification_example import ConstraintQualificationExample
 from pyomo.contrib.mindtpy.tests.online_doc_example import OnlineDocExample
 from pyomo.environ import SolverFactory, value
 from pyomo.opt import TerminationCondition
 
-required_solvers = ('ipopt', 'cplex_persistent')
-if all(SolverFactory(s).available(False) for s in required_solvers):
+required_nlp_solvers = 'ipopt'
+required_mip_solvers = ['cplex_persistent', 'gurobi_persistent']
+available_mip_solvers = [s for s in required_mip_solvers
+                         if SolverFactory(s).available(False)]
+
+if SolverFactory(required_nlp_solvers).available(False) and available_mip_solvers:
     subsolvers_available = True
 else:
     subsolvers_available = False
 
 
+model_list = [EightProcessFlowsheet(convex=True),
+              ConstraintQualificationExample(),
+              SimpleMINLP()
+              ]
+
+
 @unittest.skipIf(not subsolvers_available,
-                 "Required subsolvers %s are not available"
-                 % (required_solvers,))
+                 'Required subsolvers %s are not available'
+                 % ([required_nlp_solvers] + required_mip_solvers))
 @unittest.skipIf(not pyomo.core.base.symbolic.differentiate_available,
-                 "Symbolic differentiation is not available")
+                 'Symbolic differentiation is not available')
 class TestMindtPy(unittest.TestCase):
     """Tests for the MindtPy solver plugin."""
 
-    # lazy callback tests
-
-    def test_lazy_OA_8PP(self):
+    @unittest.skipUnless('cplex_persistent' in available_mip_solvers,
+                         'cplex_persistent solver is not available')
+    def test_LPNLP_CPLEX(self):
         """Test the LP/NLP decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = EightProcessFlowsheet()
-            print('\n Solving 8PP problem with LP/NLP')
-            results = opt.solve(model, strategy='OA',
-                                init_strategy='rNLP',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                bound_tolerance=1E-5,
-                                single_tree=True)
+            for model in model_list:
+                results = opt.solve(model, strategy='OA',
+                                    mip_solver='cplex_persistent',
+                                    nlp_solver=required_nlp_solvers,
+                                    single_tree=True)
 
-            self.assertIn(results.solver.termination_condition,
-                          [TerminationCondition.optimal, TerminationCondition.feasible])
-            self.assertAlmostEqual(value(model.cost.expr), 68, places=1)
+                self.assertIn(results.solver.termination_condition,
+                              [TerminationCondition.optimal, TerminationCondition.feasible])
+                self.assertAlmostEqual(
+                    value(model.objective.expr), model.optimal_value, places=1)
 
-    def test_lazy_OA_8PP_init_max_binary(self):
+    @unittest.skipUnless('gurobi_persistent' in available_mip_solvers,
+                         'gurobi_persistent solver is not available')
+    def test_LPNLP_GUROBI(self):
         """Test the LP/NLP decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = EightProcessFlowsheet()
-            print('\n Solving 8PP_init_max_binary problem with LP/NLP')
-            results = opt.solve(model, strategy='OA',
-                                init_strategy='max_binary',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                single_tree=True)
+            for model in model_list:
+                results = opt.solve(model, strategy='OA',
+                                    mip_solver='gurobi_persistent',
+                                    nlp_solver=required_nlp_solvers,
+                                    single_tree=True)
 
-            self.assertIn(results.solver.termination_condition,
-                          [TerminationCondition.optimal, TerminationCondition.feasible])
-            self.assertAlmostEqual(value(model.cost.expr), 68, places=1)
+                self.assertIn(results.solver.termination_condition,
+                              [TerminationCondition.optimal, TerminationCondition.feasible])
+                self.assertAlmostEqual(
+                    value(model.objective.expr), model.optimal_value, places=1)
 
-    def test_lazy_OA_MINLP_simple(self):
+    def test_RLPNLP_L1(self):
         """Test the LP/NLP decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = SimpleMINLP()
-            print('\n Solving MINLP_simple problem with LP/NLP')
-            results = opt.solve(model, strategy='OA',
-                                init_strategy='initial_binary',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                obj_bound=10,
-                                single_tree=True)
+            for model in model_list:
+                for mip_solver in available_mip_solvers:
+                    results = opt.solve(model, strategy='OA',
+                                        mip_solver=mip_solver,
+                                        nlp_solver=required_nlp_solvers,
+                                        single_tree=True,
+                                        add_regularization='level_L1')
 
-            self.assertIs(results.solver.termination_condition,
-                          TerminationCondition.optimal)
-            self.assertAlmostEqual(value(model.cost.expr), 3.5, places=2)
+                    self.assertIn(results.solver.termination_condition,
+                                  [TerminationCondition.optimal, TerminationCondition.feasible])
+                    self.assertAlmostEqual(
+                        value(model.objective.expr), model.optimal_value, places=1)
 
-    def test_lazy_OA_MINLP2_simple(self):
+    def test_RLPNLP_L2(self):
         """Test the LP/NLP decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = SimpleMINLP2()
-            print('\n Solving MINLP2_simple problem with LP/NLP')
-            results = opt.solve(model, strategy='OA',
-                                init_strategy='initial_binary',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                single_tree=True,
-                                bound_tolerance=1E-2)
-            self.assertIs(results.solver.termination_condition,
-                          TerminationCondition.optimal)
-            self.assertAlmostEqual(value(model.cost.expr), 6.00976, places=2)
+            for model in model_list:
+                for mip_solver in available_mip_solvers:
+                    results = opt.solve(model, strategy='OA',
+                                        mip_solver=mip_solver,
+                                        nlp_solver=required_nlp_solvers,
+                                        single_tree=True,
+                                        add_regularization='level_L2')
 
-    def test_lazy_OA_MINLP3_simple(self):
+                    self.assertIn(results.solver.termination_condition,
+                                  [TerminationCondition.optimal, TerminationCondition.feasible])
+                    self.assertAlmostEqual(
+                        value(model.objective.expr), model.optimal_value, places=1)
+
+    def test_RLPNLP_Linf(self):
         """Test the LP/NLP decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = SimpleMINLP3()
-            print('\n Solving MINLP3_simple problem with LP/NLP')
-            results = opt.solve(model, strategy='OA', init_strategy='initial_binary',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                obj_bound=10,
-                                single_tree=True)
-            # TODO: fix the bug of bound here
-            # self.assertIs(results.solver.termination_condition,
-            #               TerminationCondition.optimal)
-            self.assertAlmostEqual(value(model.cost.expr), -5.512, places=2)
+            for model in model_list:
+                for mip_solver in available_mip_solvers:
+                    results = opt.solve(model, strategy='OA',
+                                        mip_solver=mip_solver,
+                                        nlp_solver=required_nlp_solvers,
+                                        single_tree=True,
+                                        add_regularization='level_L_infinity')
 
-    def test_lazy_OA_Proposal(self):
+                    self.assertIn(results.solver.termination_condition,
+                                  [TerminationCondition.optimal, TerminationCondition.feasible])
+                    self.assertAlmostEqual(
+                        value(model.objective.expr), model.optimal_value, places=1)
+
+    def test_RLPNLP_grad_lag(self):
         """Test the LP/NLP decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = ProposalModel()
-            print('\n Solving Proposal problem with LP/NLP')
-            results = opt.solve(model, strategy='OA',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                single_tree=True)
+            for model in model_list:
+                for mip_solver in available_mip_solvers:
+                    results = opt.solve(model, strategy='OA',
+                                        mip_solver=mip_solver,
+                                        nlp_solver=required_nlp_solvers,
+                                        single_tree=True,
+                                        add_regularization='grad_lag')
 
-            self.assertIn(results.solver.termination_condition,
-                          [TerminationCondition.optimal, TerminationCondition.feasible])
-            self.assertAlmostEqual(value(model.obj.expr), 0.66555, places=2)
+                    self.assertIn(results.solver.termination_condition,
+                                  [TerminationCondition.optimal, TerminationCondition.feasible])
+                    self.assertAlmostEqual(
+                        value(model.objective.expr), model.optimal_value, places=1)
 
-    def test_lazy_OA_ConstraintQualificationExample(self):
+    def test_RLPNLP_hess_lag(self):
+        """Test the LP/NLP decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = ConstraintQualificationExample()
-            print('\n Solving ConstraintQualificationExample with LP/NLP')
-            results = opt.solve(model, strategy='OA',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                single_tree=True
-                                )
-            self.assertIs(results.solver.termination_condition,
-                          TerminationCondition.feasible)
-            self.assertAlmostEqual(value(model.objective.expr), 3, places=2)
+            for model in model_list:
+                for mip_solver in available_mip_solvers:
+                    results = opt.solve(model, strategy='OA',
+                                        mip_solver=mip_solver,
+                                        nlp_solver=required_nlp_solvers,
+                                        single_tree=True,
+                                        add_regularization='hess_lag')
 
-    def test_OA_OnlineDocExample(self):
+                    self.assertIn(results.solver.termination_condition,
+                                  [TerminationCondition.optimal, TerminationCondition.feasible])
+                    self.assertAlmostEqual(
+                        value(model.objective.expr), model.optimal_value, places=1)
+
+    def test_RLPNLP_hess_only_lag(self):
+        """Test the LP/NLP decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = OnlineDocExample()
-            print('\n Solving OnlineDocExample with LP/NLP')
-            results = opt.solve(model, strategy='OA',
-                                mip_solver=required_solvers[1],
-                                nlp_solver=required_solvers[0],
-                                single_tree=True
-                                )
-            self.assertIs(results.solver.termination_condition,
-                          TerminationCondition.optimal)
-            self.assertAlmostEqual(
-                value(model.objective.expr), 2.438447, places=2)
+            for model in model_list:
+                for mip_solver in available_mip_solvers:
+                    results = opt.solve(model, strategy='OA',
+                                        mip_solver=mip_solver,
+                                        nlp_solver=required_nlp_solvers,
+                                        single_tree=True,
+                                        add_regularization='hess_only_lag')
 
-    # TODO fix the bug with integer_to_binary
-    # def test_OA_Proposal_with_int_cuts(self):
-    #     """Test the outer approximation decomposition algorithm."""
-    #     with SolverFactory('mindtpy') as opt:
-    #         model = ProposalModel()
-    #         print('\n Solving problem with Outer Approximation')
-    #         opt.solve(model, strategy='OA',
-    #                   mip_solver=required_solvers[1],
-    #                   nlp_solver=required_solvers[0],
-    #                   add_nogood_cuts=True,
-    #                   integer_to_binary=True,  # if we use lazy callback, we cannot set integer_to_binary True
-    #                   lazy_callback=True,
-    #                   iteration_limit=1)
+                    self.assertIn(results.solver.termination_condition,
+                                  [TerminationCondition.optimal, TerminationCondition.feasible])
+                    self.assertAlmostEqual(
+                        value(model.objective.expr), model.optimal_value, places=1)
 
-    #         # self.assertIs(results.solver.termination_condition,
-    #         #               TerminationCondition.optimal)
-    #         self.assertAlmostEquals(value(model.obj.expr), 0.66555, places=2)
+    def test_RLPNLP_sqp_lag(self):
+        """Test the LP/NLP decomposition algorithm."""
+        with SolverFactory('mindtpy') as opt:
+            for model in model_list:
+                for mip_solver in available_mip_solvers:
+                    results = opt.solve(model, strategy='OA',
+                                        mip_solver=mip_solver,
+                                        nlp_solver=required_nlp_solvers,
+                                        single_tree=True,
+                                        add_regularization='sqp_lag')
+
+                    self.assertIn(results.solver.termination_condition,
+                                  [TerminationCondition.optimal, TerminationCondition.feasible])
+                    self.assertAlmostEqual(
+                        value(model.objective.expr), model.optimal_value, places=1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

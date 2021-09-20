@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Example 2 in paper "A Feasibility Pump for mixed integer nonlinear programs"
+"""Example 2 in paper 'A Feasibility Pump for mixed integer nonlinear programs'
 
 Ref:
     Bonami P, Cornuéjols G, Lodi A, et al. A feasibility pump for mixed integer nonlinear programs[J]. Mathematical Programming, 2009, 119(2): 331-352.
@@ -11,8 +11,6 @@ Ref:
 
 """
 from __future__ import division
-
-from six import iteritems
 from math import pi
 
 from pyomo.environ import (Binary, ConcreteModel, Constraint,
@@ -36,3 +34,4 @@ class Feasibility_Pump2(ConcreteModel):
 
         m.c1 = Constraint(expr=m.y - sin(m.x * pi * (5 / 3)) <= 0)
         m.c2 = Constraint(expr=- m.y - sin(m.x * pi * (5 / 3)) <= 0)
+        m.optimal_value = 0

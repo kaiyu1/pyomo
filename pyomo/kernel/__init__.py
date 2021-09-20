@@ -23,7 +23,36 @@ from pyomo.opt import (SolverFactory,
 # Define the modeling namespace
 #
 from pyomo.common.collections import ComponentMap, ComponentSet
-from pyomo.core.expr import *
+from pyomo.core.expr import (
+    numvalue, numeric_expr, boolean_value, logical_expr, current,
+    calculus, symbol_map, expr_errors, visitor, sympy_tools, taylor_series,
+    expr_common, cnf_walker, template_expr
+)
+
+
+from pyomo.core.expr.numvalue import (
+    value, is_constant, is_fixed, is_variable_type,
+    is_potentially_variable, NumericValue, ZeroConstant,
+    native_numeric_types, native_types, polynomial_degree,
+)
+
+from pyomo.core.expr.boolean_value import BooleanValue
+
+from pyomo.core.expr.numeric_expr import linear_expression, nonlinear_expression
+
+from pyomo.core.expr.logical_expr import (land, lor, equivalent, exactly,
+                                          atleast, atmost, implies, lnot,
+                                          xor, inequality)
+
+from pyomo.core.expr.current import (
+    log, log10, sin, cos, tan, cosh, sinh, tanh,
+    asin, acos, atan, exp, sqrt, asinh, acosh,
+    atanh, ceil, floor,
+    Expr_if,
+)
+
+from pyomo.core.expr.calculus.derivatives import differentiate
+from pyomo.core.expr.taylor_series import taylor_series_expansion
 import pyomo.core.kernel
 from pyomo.kernel.util import (generate_names,
                                preorder_traversal,
@@ -180,8 +209,7 @@ def _component_data_objects(self, *args, **kwds):
     kwds.pop('sort', None)
     if 'active' not in kwds:
         kwds['active'] = None
-    for component in self.components(*args, **kwds):
-        yield component
+    yield from self.components(*args, **kwds)
 IHeterogeneousContainer.component_data_objects = \
     _component_data_objects
 del _component_data_objects
@@ -196,8 +224,7 @@ def _component_objects(self, *args, **kwds):
     for item in heterogeneous_containers(self,
                                          active=active,
                                          descend_into=descend_into):
-        for child in item.children(*args, **kwds):
-            yield child
+        yield from item.children(*args, **kwds)
 IHeterogeneousContainer.component_objects = \
     _component_objects
 del _component_objects
@@ -213,10 +240,7 @@ def _block_data_objects(self, **kwds):
        (not self.active):
         return
     yield self
-    for component in self.components(
-            ctype=self.ctype,
-            **kwds):
-        yield component
+    yield from self.components(ctype=self.ctype, **kwds)
 block.block_data_objects = _block_data_objects
 del _block_data_objects
 

@@ -1,16 +1,22 @@
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
 """Utility functions and classes for the GDPopt solver."""
+
 from __future__ import division
 
 import logging
-import timeit
 from contextlib import contextmanager
 from math import fabs
 
-import six
-from pyutilib.misc import Container
-
-from pyomo.common import deprecated
-from pyomo.common.collections import ComponentSet
+from pyomo.common import deprecated, timing
+from pyomo.common.collections import ComponentSet, Bunch
 from pyomo.contrib.fbbt.fbbt import compute_bounds_on_expr
 from pyomo.contrib.gdpopt.data_class import GDPoptSolveData
 from pyomo.contrib.mcpp.pyomo_mcpp import mcpp_available, McCormick
@@ -105,7 +111,7 @@ def presolve_lp_nlp(solve_data, config):
     return False, None
 
 
-def process_objective(solve_data, config, move_linear_objective=False, use_mcpp=True):
+def process_objective(solve_data, config, move_linear_objective=False, use_mcpp=True, updata_var_con_list=True):
     """Process model objective function.
 
     Check that the model has only 1 valid objective.
@@ -171,8 +177,16 @@ def process_objective(solve_data, config, move_linear_objective=False, use_mcpp=
         util_blk.objective = Objective(
             expr=util_blk.objective_value, sense=main_obj.sense)
         # Add the new variable and constraint to the working lists
-        util_blk.variable_list.append(util_blk.objective_value)
-        util_blk.constraint_list.append(util_blk.objective_constr)
+        if main_obj.expr.polynomial_degree() not in (1, 0) or (move_linear_objective and updata_var_con_list):
+            util_blk.variable_list.append(util_blk.objective_value)
+            util_blk.continuous_variable_list.append(util_blk.objective_value)
+            util_blk.constraint_list.append(util_blk.objective_constr)
+            util_blk.objective_list.append(util_blk.objective)
+            if util_blk.objective_constr.body.polynomial_degree() in (0, 1):
+                util_blk.linear_constraint_list.append(util_blk.objective_constr)
+            else:
+                util_blk.nonlinear_constraint_list.append(
+                    util_blk.objective_constr)
 
 
 def a_logger(str_or_logger):
@@ -284,6 +298,17 @@ def build_ordered_component_lists(model, solve_data):
             model.component_data_objects(
                 ctype=Constraint, active=True,
                 descend_into=(Block, Disjunct))))
+    # print(util_blk.constraint_list)
+    setattr(
+        util_blk, 'linear_constraint_list', list(c for c in model.component_data_objects(
+            ctype=Constraint, active=True, descend_into=(Block, Disjunct))
+            if c.body.polynomial_degree() in (0, 1)))
+    # print(util_blk.linear_constraint_list)
+    setattr(
+        util_blk, 'nonlinear_constraint_list', list(c for c in model.component_data_objects(
+            ctype=Constraint, active=True, descend_into=(Block, Disjunct))
+            if c.body.polynomial_degree() not in (0, 1)))
+    # print(util_blk.nonlinear_constraint_list)
     setattr(
         util_blk, 'disjunct_list', list(
             model.component_data_objects(
@@ -294,6 +319,11 @@ def build_ordered_component_lists(model, solve_data):
             model.component_data_objects(
                 ctype=Disjunction, active=True,
                 descend_into=(Disjunct, Block))))
+    setattr(
+        util_blk, 'objective_list', list(
+            model.component_data_objects(
+                ctype=Objective, active=True,
+                descend_into=(Block))))
 
     # Identify the non-fixed variables in (potentially) active constraints and
     # objective functions
@@ -308,7 +338,7 @@ def build_ordered_component_lists(model, solve_data):
     # active algebraic constraints. For now, they need to be added to the
     # variable set.
     for disj in getattr(util_blk, 'disjunct_list'):
-        var_set.add(disj.indicator_var)
+        var_set.add(disj.binary_indicator_var)
 
     # We use component_data_objects rather than list(var_set) in order to
     # preserve a deterministic ordering.
@@ -317,6 +347,16 @@ def build_ordered_component_lists(model, solve_data):
             ctype=Var, descend_into=(Block, Disjunct))
         if v in var_set)
     setattr(util_blk, 'variable_list', var_list)
+    discrete_variable_list = list(
+        v for v in model.component_data_objects(
+            ctype=Var, descend_into=(Block, Disjunct))
+        if v in var_set and v.is_integer())
+    setattr(util_blk, 'discrete_variable_list', discrete_variable_list)
+    continuous_variable_list = list(
+        v for v in model.component_data_objects(
+            ctype=Var, descend_into=(Block, Disjunct))
+        if v in var_set and v.is_continuous())
+    setattr(util_blk, 'continuous_variable_list', continuous_variable_list)
 
 
 def setup_results_object(solve_data, config):
@@ -389,7 +429,8 @@ def constraints_in_True_disjuncts(model, config):
             if disj in observed_disjuncts:
                 continue
             observed_disjuncts.add(disj)
-            if fabs(disj.indicator_var.value - 1) <= config.integer_tolerance:
+            if fabs(disj.binary_indicator_var.value - 1) \
+               <= config.integer_tolerance:
                 for constr in disj.component_data_objects(Constraint):
                     yield constr
 
@@ -402,25 +443,25 @@ def time_code(timing_data_obj, code_block_name, is_main_timer=False):
     allowing calculation of total elapsed time 'on the fly' (e.g. to enforce
     a time limit) using `get_main_elapsed_time(timing_data_obj)`.
     """
-    start_time = timeit.default_timer()
+    start_time = timing.default_timer()
     if is_main_timer:
         timing_data_obj.main_timer_start_time = start_time
     yield
-    elapsed_time = timeit.default_timer() - start_time
+    elapsed_time = timing.default_timer() - start_time
     prev_time = timing_data_obj.get(code_block_name, 0)
     timing_data_obj[code_block_name] = prev_time + elapsed_time
 
 
 def get_main_elapsed_time(timing_data_obj):
     """Returns the time since entering the main `time_code` context"""
-    current_time = timeit.default_timer()
+    current_time = timing.default_timer()
     try:
         return current_time - timing_data_obj.main_timer_start_time
     except AttributeError as e:
         if 'main_timer_start_time' in str(e):
-            six.raise_from(e, AttributeError(
+            raise e from AttributeError(
                 "You need to be in a 'time_code' context to use `get_main_elapsed_time()`."
-            ))
+            )
 
 
 @deprecated(
@@ -429,7 +470,7 @@ def get_main_elapsed_time(timing_data_obj):
     version='5.6.9')
 @contextmanager
 def restore_logger_level(logger):
-    old_logger_level = logger.getEffectiveLevel()
+    old_logger_level = logger.level
     yield
     logger.setLevel(old_logger_level)
 
@@ -437,9 +478,9 @@ def restore_logger_level(logger):
 @contextmanager
 def lower_logger_level_to(logger, level=None):
     """Increases logger verbosity by lowering reporting level."""
-    old_logger_level = logger.getEffectiveLevel()
-    if level is not None and old_logger_level > level:
+    if level is not None and logger.getEffectiveLevel() > level:
         # If logger level is higher (less verbose), decrease it
+        old_logger_level = logger.level
         logger.setLevel(level)
         yield
         logger.setLevel(old_logger_level)
@@ -476,7 +517,7 @@ def setup_solver_environment(model, config):
     solve_data = GDPoptSolveData()  # data object for storing solver state
     solve_data.config = config
     solve_data.results = SolverResults()
-    solve_data.timing = Container()
+    solve_data.timing = Bunch()
     min_logging_level = logging.INFO if config.tee else None
     with time_code(solve_data.timing, 'total', is_main_timer=True), \
             lower_logger_level_to(config.logger, min_logging_level), \

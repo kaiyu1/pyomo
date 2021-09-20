@@ -9,14 +9,7 @@
 #  ___________________________________________________________________________
 
 import math
-
-from six import iteritems, PY3
-from six.moves import xrange
-
-if PY3:
-    from collections.abc import Sequence as collections_Sequence
-else:
-    from collections import Sequence as collections_Sequence
+from collections.abc import Sequence
 
 try:
     from math import remainder
@@ -132,7 +125,7 @@ class NumericRange(object):
 
         This method must be defined because this class uses slots.
         """
-        for key, val in iteritems(state):
+        for key, val in state.items():
             # Note: per the Python data model docs, we explicitly
             # set the attribute using object.__setattr__() instead
             # of setting self.__dict__[key] = val.
@@ -168,8 +161,23 @@ class NumericRange(object):
     def __contains__(self, value):
         # NumericRanges must hold items that are comparable to ints
         if value.__class__ not in self._types_comparable_to_int:
+            # Special case: because numpy is fond of returning scalars
+            # as length-1 ndarrays, we will include a special case that
+            # will unpack things that look like single element arrays.
             try:
-                if value.__class__(0) != 0:
+                # Note: trap "value[0] is not value" to catch things like
+                # single-character strings
+                if hasattr(value, '__len__') and hasattr(value, '__getitem__') \
+                   and len(value) == 1 and value[0] is not value:
+                    return value[0] in self
+            except:
+                pass
+            # See if this class behaves like a "normal" number: both
+            # comparable and creatable
+            try:
+                if not ( bool(value - 0 > 0) ^ bool(value - 0 <= 0) ):
+                    return False
+                elif value.__class__(0) != 0 or not value.__class__(0) == 0:
                     return False
                 else:
                     self._types_comparable_to_int.add(value.__class__)
@@ -475,7 +483,7 @@ class NumericRange(object):
         assert new_step % cnr.step == 0
         _dir = math.copysign(1, cnr.step)
         _subranges = []
-        for i in xrange(int(abs(new_step // cnr.step))):
+        for i in range(int(abs(new_step // cnr.step))):
             if ( cnr.end is not None
                  and _dir*(cnr.start + i*cnr.step) > _dir*cnr.end ):
                 # Once we walk past the end of the range, we are done
@@ -619,7 +627,7 @@ class NumericRange(object):
                             t.start, start, 0, (t.closed[0], False)
                         ))
                     if s.step: # i.e., not a single point
-                        for i in xrange(int(start//s.step), int(end//s.step)):
+                        for i in range(int(start//s.step), int(end//s.step)):
                             _new_subranges.append(NumericRange(
                                 i*s.step, (i+1)*s.step, 0, '()'
                             ))
@@ -796,7 +804,7 @@ class NonNumericRange(object):
 
         This method must be defined because this class uses slots.
         """
-        for key, val in iteritems(state):
+        for key, val in state.items():
             # Note: per the Python data model docs, we explicitly
             # set the attribute using object.__setattr__() instead
             # of setting self.__dict__[key] = val.
@@ -903,7 +911,7 @@ class RangeProduct(object):
         return not self.__eq__(other)
 
     def __contains__(self, value):
-        if not isinstance(value, collections_Sequence):
+        if not isinstance(value, Sequence):
             return False
         if len(value) != len(self.range_lists):
             return False
@@ -927,7 +935,7 @@ class RangeProduct(object):
 
         This method must be defined because this class uses slots.
         """
-        for key, val in iteritems(state):
+        for key, val in state.items():
             # Note: per the Python data model docs, we explicitly
             # set the attribute using object.__setattr__() instead
             # of setting self.__dict__[key] = val.
@@ -981,7 +989,7 @@ class RangeProduct(object):
                     tmp.append(rp)
                     continue
 
-                for dim in xrange(N):
+                for dim in range(N):
                     remainder = []
                     for r in rp.range_lists[dim]:
                         remainder.extend(
@@ -1005,7 +1013,7 @@ class RangeProduct(object):
             if type(other) is not RangeProduct or len(other.range_lists) != N:
                 return []
 
-            for dim in xrange(N):
+            for dim in range(N):
                 tmp = []
                 for r in ans[dim]:
                     tmp.extend(r.range_intersection(other.range_lists[dim]))

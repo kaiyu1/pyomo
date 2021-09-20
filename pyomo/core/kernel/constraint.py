@@ -9,23 +9,16 @@
 #  ___________________________________________________________________________
 
 from pyomo.core.expr.numvalue import (ZeroConstant,
-                                      is_constant,
                                       as_numeric,
-                                      native_types,
                                       is_potentially_variable,
                                       is_numeric_data,
-                                      value,
-                                      _sub)
+                                      value)
 from pyomo.core.expr import logical_expr
 from pyomo.core.kernel.base import \
     (ICategorizedObject,
-     _abstract_readwrite_property,
      _abstract_readonly_property)
 from pyomo.core.kernel.container_utils import \
     define_simple_containers
-
-import six
-from six.moves import zip
 
 _pos_inf = float('inf')
 _neg_inf = float('-inf')
@@ -460,6 +453,12 @@ class constraint(_MutableBoundsConstraintMixin,
                             "expression restricted to storage of "
                             "numeric data."
                             % (self.name))
+                elif arg1 is not None and is_numeric_data(arg1):
+                    # Special case (reflect behavior of AML): if the
+                    # upper bound is None and the "body" is only data,
+                    # then shift the body to the UB and the LB to the
+                    # body
+                    arg0, arg1, arg2 = arg2, arg0, arg1
 
                 self.lb = arg0
                 self.body  = arg1
@@ -501,19 +500,7 @@ class constraint(_MutableBoundsConstraintMixin,
                             "form for compound inequalities is "
                             "always 'lb <= expr <= ub'.")
                 raise ValueError(msg)
-        #
-        # Special check for chainedInequality errors like "if var <
-        # 1:" within rules.  Catching them here allows us to provide
-        # the user with better (and more immediate) debugging
-        # information.  We don't want to check earlier because we
-        # want to provide a specific debugging message if the
-        # construction rule returned True/False; for example, if the
-        # user did ( var < 1 > 0 ) (which also results in a non-None
-        # chainedInequality value)
-        #
-        if logical_expr._using_chained_inequality and \
-           (logical_expr._chainedInequality.prev is not None):
-            raise TypeError(logical_expr._chainedInequality.error_message())
+
         #
         # Process relational expressions
         # (i.e. explicit '==', '<', and '<=')

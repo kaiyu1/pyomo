@@ -7,11 +7,13 @@
 #  rights in this software.
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 
 from pyomo.contrib.pynumero.dependencies import (
-    numpy as np, numpy_available, scipy_sparse as sp, scipy_available
+    numpy as np, numpy_available, scipy, scipy_available
 )
+from pyomo.common.dependencies.scipy import sparse as sp
+
 if not (numpy_available and scipy_available):
     raise unittest.SkipTest(
         "Pynumero needs scipy and numpy to run BlockMatrix tests")
@@ -328,7 +330,7 @@ class TestBlockMatrix(unittest.TestCase):
         self.assertTrue(np.allclose(r.toarray(), dense_res))
 
         with self.assertRaises(Exception) as context:
-            mm = A_block.__radd__(A_block.toarray())
+            mm = A_block.toarray() + A_block
 
         with self.assertRaises(Exception) as context:
             mm = A_block + A_block.toarray()

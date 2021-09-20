@@ -10,12 +10,11 @@
 
 import os
 
-import pyutilib
-import pyutilib.th as unittest
+from pyomo.common.tempfiles import TempfileManager
+import pyomo.common.unittest as unittest
 
 import pyomo.kernel as pmo
 from pyomo.core import Binary, ConcreteModel, Constraint, Objective, Var, Integers, RangeSet, minimize, quicksum, Suffix
-from pyomo.environ import *
 from pyomo.opt import ProblemFormat, convert_problem, SolverFactory, BranchDirection
 from pyomo.solvers.plugins.solvers.CPLEX import CPLEXSHELL, MockCPLEX, _validate_file_name
 
@@ -40,7 +39,7 @@ class CPLEX_utils(unittest.TestCase):
 
         # Check spaces in the file
         fname = 'foo bar.lp'
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 ValueError, "Space detected in CPLEX xxx file"):
             _validate_file_name(_126, fname, 'xxx')
         self.assertEqual('"%s"' % (fname,),
@@ -54,11 +53,11 @@ class CPLEX_utils(unittest.TestCase):
         # check BAD path separators
         bad_char = '/\\'.replace(os.path.sep,'')
         fname = 'foo%sbar.lp' % (bad_char,)
-        msg = 'Unallowed character \(%s\) found in CPLEX xxx file' % (
+        msg = r'Unallowed character \(%s\) found in CPLEX xxx file' % (
             repr(bad_char)[1:-1],)
-        with self.assertRaisesRegexp(ValueError, msg):
+        with self.assertRaisesRegex(ValueError, msg):
             _validate_file_name(_126, fname, 'xxx')
-        with self.assertRaisesRegexp(ValueError, msg):
+        with self.assertRaisesRegex(ValueError, msg):
             _validate_file_name(_128, fname, 'xxx')
 
 
@@ -67,14 +66,15 @@ class CPLEXShellWritePrioritiesFile(unittest.TestCase):
     suffix_cls = Suffix
 
     def setUp(self):
+        TempfileManager.push()
         self.mock_model = self.get_mock_model()
         self.mock_cplex_shell = self.get_mock_cplex_shell(self.mock_model)
-        self.mock_cplex_shell._priorities_file_name = pyutilib.services.TempfileManager.create_tempfile(
+        self.mock_cplex_shell._priorities_file_name = TempfileManager.create_tempfile(
             suffix=".cplex.ord"
         )
 
     def tearDown(self):
-        pyutilib.services.TempfileManager.clear_tempfiles()
+        TempfileManager.clear_tempfiles()
 
     def get_mock_model(self):
         model = ConcreteModel()

@@ -13,8 +13,9 @@ __all__ = ['BuildCheck']
 import logging
 import types
 
+from pyomo.common.log import is_debug_set
 from pyomo.common.timing import ConstructionTimer
-from pyomo.core.base.plugin import ModelComponentFactory
+from pyomo.core.base.component import ModelComponentFactory
 from pyomo.core.base.indexed_component import IndexedComponent
 from pyomo.core.base.misc import apply_indexed_rule
 
@@ -47,7 +48,7 @@ class BuildCheck(IndexedComponent):
 
     def construct(self, data=None):
         """ Apply the rule to construct values in this set """
-        if __debug__ and logger.isEnabledFor(logging.DEBUG):   #pragma:nocover
+        if is_debug_set(logger):   #pragma:nocover
                 logger.debug("Constructing Check, name="+self.name)
         #
         if self._constructed:                                  #pragma:nocover

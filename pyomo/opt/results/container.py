@@ -11,17 +11,13 @@
 __all__ = ['UndefinedData', 'undefined', 'ignore', 'ScalarData', 'ListContainer', 'MapContainer', 'default_print_options', 'ScalarType']
 
 import copy
-import math
 
-import pyutilib.math
-from pyutilib.misc import Bunch
+from math import inf
+from pyomo.common.collections import Bunch
+
 import enum
-from six import iterkeys, itervalues, iteritems, advance_iterator, StringIO
-from six.moves import xrange
-try:
-    unicode
-except NameError:
-    basestring = unicode = str
+from io import StringIO
+
 
 class ScalarType(str, enum.Enum):
     int='int'
@@ -106,9 +102,9 @@ class ScalarData(object):
 
         value = self.yaml_fix(self.get_value())
 
-        if value is pyutilib.math.infinity:
+        if value is inf:
             value = '.inf'
-        elif value is - pyutilib.math.infinity:
+        elif value is - inf:
             value = '-.inf'
 
         if not option.schema and self.description is None and self.units is None:
@@ -128,9 +124,9 @@ class ScalarData(object):
                     ostream.write(prefix+'Type: '+self.yaml_fix(self.scalar_type)+'\n')
 
     def yaml_fix(self, val):
-        if not isinstance(val,basestring):
+        if not isinstance(val, str):
             return val
-        return val.replace(':','\\x3a')
+        return val.replace(':', '\\x3a')
 
     def load(self, repn):
         if type(repn) is dict:
@@ -213,7 +209,7 @@ class ListContainer(object):
             return ignore
         ostream.write("\n")
         i=0
-        for i in xrange(len(self._list)):
+        for i in range(len(self._list)):
             item = self._list[i]
             ostream.write(prefix+'- ')
             item.pprint(ostream, option, from_list=True, prefix=prefix+"  ", repn=repn[i])
@@ -369,7 +365,7 @@ class MapContainer(dict):
         return tmp
 
     def _convert(self, name):
-        if not isinstance(name,basestring):
+        if not isinstance(name, str):
             return name
         tmp = name.replace('_',' ')
         return tmp[0].upper() + tmp[1:]

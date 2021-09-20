@@ -1,7 +1,16 @@
-"""Transformation to propagate a zero value to terms of a sum."""
-import textwrap
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and 
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain 
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
 
-from pyomo.core.base.plugin import TransformationFactory
+"""Transformation to propagate a zero value to terms of a sum."""
+
+from pyomo.core.base.transformation import TransformationFactory
 from pyomo.core.base.constraint import Constraint
 from pyomo.core.expr.numvalue import value
 from pyomo.core.plugins.transform.hierarchy import IsomorphicTransformation

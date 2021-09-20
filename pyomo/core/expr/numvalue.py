@@ -15,15 +15,23 @@ __all__ = ('value', 'is_constant', 'is_fixed', 'is_variable_type',
 
 import sys
 import logging
-from six import iteritems, PY3, string_types, text_type, binary_type
 
-from pyomo.core.expr.expr_common import \
-    (_add, _sub, _mul, _div, _pow,
-     _neg, _abs, _inplace, _radd,
-     _rsub, _rmul, _rdiv, _rpow,
-     _iadd, _isub, _imul, _idiv,
-     _ipow, _lt, _le, _eq)
-
+from pyomo.common.dependencies import numpy as np, numpy_available
+from pyomo.common.deprecation import deprecated
+from pyomo.core.expr.expr_common import (
+    _add, _sub, _mul, _div, _pow,
+    _neg, _abs, _radd,
+    _rsub, _rmul, _rdiv, _rpow,
+    _iadd, _isub, _imul, _idiv,
+    _ipow, _lt, _le, _eq
+)
+# TODO: update imports of these objects to pull from numeric_types
+from pyomo.common.numeric_types import (
+    nonpyomo_leaf_types, native_types, native_numeric_types,
+    native_integer_types, native_boolean_types, native_logical_types,
+    RegisterNumericType, RegisterIntegerType, RegisterBooleanType,
+    pyomo_constant_types,
+)
 from pyomo.core.pyomoobject import PyomoObject
 from pyomo.core.expr.expr_errors import TemplateExpressionError
 
@@ -67,104 +75,8 @@ class NonNumericValue(object):
     def __setstate__(self, state):
         setattr(self, 'value', state['value'])
 
+nonpyomo_leaf_types.add(NonNumericValue)
 
-#: Python set used to identify numeric constants, boolean values, strings
-#: and instances of
-#: :class:`NonNumericValue <pyomo.core.expr.numvalue.NonNumericValue>`,
-#: which is commonly used in code that walks Pyomo expression trees.
-#:
-#: :data:`nonpyomo_leaf_types` = :data:`native_types <pyomo.core.expr.numvalue.native_types>` + { :data:`NonNumericValue <pyomo.core.expr.numvalue.NonNumericValue>` }
-nonpyomo_leaf_types = set([NonNumericValue])
-
-
-# It is *significantly* faster to build the list of types we want to
-# test against as a "static" set, and not to regenerate it locally for
-# every call.  Plus, this allows us to dynamically augment the set
-# with new "native" types (e.g., from NumPy)
-#
-# Note: These type sets are used in set_types.py for domain validation
-#       For backward compatibility reasons, we include str in the set
-#       of valid types for bool. We also avoid updating the numeric
-#       and integer type sets when a new boolean type is registered
-#       because not all boolean types exhibit numeric properties
-#       (e.g., numpy.bool_)
-#
-
-#: Python set used to identify numeric constants.  This set includes
-#: native Python types as well as numeric types from Python packages
-#: like numpy, which may be registered by users.
-native_numeric_types = set([ int, float, bool ])
-native_integer_types = set([ int, bool ])
-native_boolean_types = set([ int, bool, str ])
-native_logical_types = {bool, }
-pyomo_constant_types = set()  # includes NumericConstant
-try:
-    native_numeric_types.add(long)
-    native_integer_types.add(long)
-    native_boolean_types.add(long)
-except:
-    pass
-
-#: Python set used to identify numeric constants and related native
-#: types.  This set includes
-#: native Python types as well as numeric types from Python packages
-#: like numpy.
-#:
-#: :data:`native_types` = :data:`native_numeric_types <pyomo.core.expr.numvalue.native_numeric_types>` + { str }
-native_types = set([ bool, str, type(None), slice ])
-if PY3:
-    native_types.add(bytes)
-    native_boolean_types.add(bytes)
-else:
-    native_types.add(unicode)
-    native_boolean_types.add(unicode)
-native_types.update( native_numeric_types )
-native_types.update( native_integer_types )
-native_types.update( native_boolean_types )
-nonpyomo_leaf_types.update( native_types )
-
-def RegisterNumericType(new_type):
-    """
-    A utility function for updating the set of types that are
-    recognized to handle numeric values.
-
-    The argument should be a class (e.g, numpy.float64).
-    """
-    global native_numeric_types
-    global native_types
-    native_numeric_types.add(new_type)
-    native_types.add(new_type)
-    nonpyomo_leaf_types.add(new_type)
-
-def RegisterIntegerType(new_type):
-    """
-    A utility function for updating the set of types that are
-    recognized to handle integer values. This also registers the type
-    as numeric but does not register it as boolean.
-
-    The argument should be a class (e.g., numpy.int64).
-    """
-    global native_numeric_types
-    global native_integer_types
-    global native_types
-    native_numeric_types.add(new_type)
-    native_integer_types.add(new_type)
-    native_types.add(new_type)
-    nonpyomo_leaf_types.add(new_type)
-
-def RegisterBooleanType(new_type):
-    """
-    A utility function for updating the set of types that are
-    recognized as handling boolean values. This function does not
-    register the type of integer or numeric.
-
-    The argument should be a class (e.g., numpy.bool_).
-    """
-    global native_boolean_types
-    global native_types
-    native_boolean_types.add(new_type)
-    native_types.add(new_type)
-    nonpyomo_leaf_types.add(new_type)
 
 def value(obj, exception=True):
     """
@@ -529,7 +441,7 @@ Dynamic registration is supported for convenience, but there are known
 limitations to this approach.  We recommend explicitly registering
 numeric types using the following functions:
     RegisterNumericType(), RegisterIntegerType(), RegisterBooleanType()."""
-                % (type(obj).__name__,))
+                % (obj_class.__name__,))
         except:
             pass
         return retval
@@ -587,7 +499,7 @@ class NumericValue(PyomoObject):
         if hasattr(_base, '__setstate__'):
             return _base.__setstate__(state)
         else:
-            for key, val in iteritems(state):
+            for key, val in state.items():
                 # Note: per the Python data model docs, we explicitly
                 # set the attribute using object.__setattr__() instead
                 # of setting self.__dict__[key] = val.
@@ -612,9 +524,9 @@ class NumericValue(PyomoObject):
     def local_name(self):
         return self.getname(fully_qualified=False)
 
+    @deprecated("The cname() method has been renamed to getname().",
+                version='5.0')
     def cname(self, *args, **kwds):
-        logger.warning(
-            "DEPRECATED: The cname() method has been renamed to getname()." )
         return self.getname(*args, **kwds)
 
     def is_numeric_type(self):
@@ -958,6 +870,10 @@ functions.""" % (self.name,))
         """
         return _generate_other_expression(_abs,self, None)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return NumericNDArray.__array_ufunc__(
+            None, ufunc, method, *inputs, **kwargs)
+
     def to_string(self, verbose=None, labeler=None, smap=None,
                   compute_values=False):
         """
@@ -1039,6 +955,31 @@ class NumericConstant(NumericValue):
 
 pyomo_constant_types.add(NumericConstant)
 
-
 # We use as_numeric() so that the constant is also in the cache
 ZeroConstant = as_numeric(0)
+
+#
+# Note: the "if numpy_available" in the class definition also ensures
+# that the numpy types are registered if numpy is in fact available
+#
+class NumericNDArray(np.ndarray if numpy_available else object):
+    """An ndarray subclass that stores Pyomo numeric expressions"""
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        if method == '__call__':
+            # Convert all incoming types to ndarray (to prevent recursion)
+            args = [np.asarray(i) for i in inputs]
+            # Set the return type to be an 'object'.  This prevents the
+            # logical operators from casting the result to a bool.  This
+            # requires numpy >= 1.6
+            kwargs['dtype'] = object
+
+        # Delegate to the base ufunc, but return an instance of this
+        # class so that additional operators hit this method.
+        ans = getattr(ufunc, method)(*args, **kwargs)
+        if isinstance(ans, np.ndarray):
+            if ans.size == 1:
+                return ans[0]
+            return ans.view(NumericNDArray)
+        else:
+            return ans

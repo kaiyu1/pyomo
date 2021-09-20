@@ -15,15 +15,14 @@
 import itertools
 import logging
 import math
-from six import iteritems, StringIO, iterkeys
-from six.moves import xrange
-from pyutilib.math import isclose
+from io import StringIO
 
+from pyomo.common.backports import nullcontext
 from pyomo.common.collections import OrderedSet
 from pyomo.opt import ProblemFormat
 from pyomo.opt.base import AbstractProblemWriter, WriterFactory
 from pyomo.core.expr.numvalue import (
-    is_fixed, value, native_numeric_types, native_types, nonpyomo_leaf_types,
+    value, native_numeric_types, native_types, nonpyomo_leaf_types,
 )
 from pyomo.core.expr import current as EXPR
 from pyomo.core.base import (SortComponents,
@@ -32,10 +31,8 @@ from pyomo.core.base import (SortComponents,
                              NumericLabeler,
                              Constraint,
                              Objective,
-                             Var, Param)
+                             Param)
 from pyomo.core.base.component import ActiveComponent
-from pyomo.core.base.set_types import *
-from pyomo.core.kernel.base import ICategorizedObject
 #CLH: EXPORT suffixes "constraint_types" and "branching_priorities"
 #     pass their respective information to the .bar file
 import pyomo.core.base.suffix
@@ -234,10 +231,10 @@ class ProblemWriter_bar(AbstractProblemWriter):
         branching_priorities_suffixes = []
         for block in all_blocks_list:
             for name, suffix in suffix_gen(block):
-                if name == 'branching_priorities':
+                if name in {'branching_priorities', 'priority'}:
                     branching_priorities_suffixes.append(suffix)
                 elif name == 'constraint_types':
-                    for constraint_data, constraint_type in iteritems(suffix):
+                    for constraint_data, constraint_type in suffix.items():
                         if not _skip_trivial(constraint_data):
                             if constraint_type.lower() == 'relaxationonly':
                                 r_o_eqns.append(constraint_data)
@@ -251,10 +248,18 @@ class ProblemWriter_bar(AbstractProblemWriter):
                                     "Choices are: [relaxationonly, convex, local]"
                                     % (suffix.name, constraint_type))
                 else:
+                    if block is block.model():
+                        if block.name == 'unknown':
+                            _location = 'model'
+                        else:
+                            _location = "model '%s'" % (block.name,)
+                    else:
+                        _location = "block '%s'" % (block.name,)
+
                     raise ValueError(
                         "The BARON writer can not export suffix with name '%s'. "
-                        "Either remove it from block '%s' or deactivate it."
-                        % (block.name, name))
+                        "Either remove it from the %s or deactivate it."
+                        % (name, _location))
 
         non_standard_eqns = r_o_eqns + c_eqns + l_eqns
 
@@ -367,7 +372,7 @@ class ProblemWriter_bar(AbstractProblemWriter):
                     if param.mutable and param.is_indexed():
                         param_data_iter = \
                             (param_data for index, param_data
-                             in iteritems(param))
+                             in param.items())
                     elif not param.is_indexed():
                         param_data_iter = iter([param])
                     else:
@@ -512,7 +517,30 @@ class ProblemWriter_bar(AbstractProblemWriter):
                  output_filename,
                  solver_capability,
                  io_options):
+        if output_filename is None:
+            output_filename = model.name + ".bar"
 
+        # If the user provides a file name, we will use the opened file
+        # as a context manager to ensure it gets closed.  If the user
+        # provided something else (e.g., a file-like object), we will
+        # use a nullcontext manager to prevent closing it.
+        if isinstance(output_filename, str):
+            output_file = open(output_filename, "w")
+        else:
+            output_file = nullcontext(output_filename)
+
+        with output_file as FILE:
+            symbol_map = self._write_bar_file(
+                model, FILE, solver_capability, io_options)
+
+        return output_filename, symbol_map
+
+
+    def _write_bar_file(self,
+                        model,
+                        output_file,
+                        solver_capability,
+                        io_options):
         # Make sure not to modify the user's dictionary, they may be
         # reusing it outside of this call
         io_options = dict(io_options)
@@ -552,7 +580,7 @@ class ProblemWriter_bar(AbstractProblemWriter):
         if len(io_options):
             raise ValueError(
                 "ProblemWriter_baron_writer passed unrecognized io_options:\n\t" +
-                "\n\t".join("%s = %s" % (k,v) for k,v in iteritems(io_options)))
+                "\n\t".join("%s = %s" % (k,v) for k,v in io_options.items()))
 
         if symbolic_solver_labels and (labeler is not None):
             raise ValueError("Baron problem writer: Using both the "
@@ -573,17 +601,12 @@ class ProblemWriter_bar(AbstractProblemWriter):
                 "export models with this component type." %
                 ", ".join(invalids))
 
-        if output_filename is None:
-            output_filename = model.name + ".bar"
-
-        output_file=open(output_filename, "w")
-
         # Process the options. Rely on baron to catch
         # and reset bad option values
         output_file.write("OPTIONS {\n")
         summary_found = False
         if len(solver_options):
-            for key, val in iteritems(solver_options):
+            for key, val in solver_options.items():
                 if (key.lower() == 'summary'):
                     summary_found = True
                 if key.endswith("Name"):
@@ -778,15 +801,20 @@ class ProblemWriter_bar(AbstractProblemWriter):
         # object, indexed by the relevant variable
         BranchingPriorityHeader = False
         for suffix in branching_priorities_suffixes:
-            for var_data, priority in iteritems(suffix):
-                if id(var_data) not in referenced_variable_ids:
-                    continue
-                if priority is not None:
-                    if not BranchingPriorityHeader:
-                        output_file.write('BRANCHING_PRIORITIES{\n')
-                        BranchingPriorityHeader = True
-                    name_to_output = symbol_map.getSymbol(var_data)
-                    output_file.write(name_to_output+': '+str(priority)+';\n')
+            for var, priority in suffix.items():
+                if var.is_indexed():
+                    var_iter = var.values()
+                else:
+                    var_iter = (var,)
+                for var_data in var_iter:
+                    if id(var_data) not in referenced_variable_ids:
+                        continue
+                    if priority is not None:
+                        if not BranchingPriorityHeader:
+                            output_file.write('BRANCHING_PRIORITIES{\n')
+                            BranchingPriorityHeader = True
+                        output_file.write( "%s: %s;\n" % (
+                            symbol_map.getSymbol(var_data), priority))
 
         if BranchingPriorityHeader:
             output_file.write("}\n\n")
@@ -814,7 +842,5 @@ class ProblemWriter_bar(AbstractProblemWriter):
         output_file.write("".join( tmp[key] for key in sorted(tmp.keys()) ))
         output_file.write('}\n\n')
 
-        output_file.close()
-
-        return output_filename, symbol_map
+        return symbol_map
 

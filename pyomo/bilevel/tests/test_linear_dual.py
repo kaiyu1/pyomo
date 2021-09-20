@@ -12,22 +12,22 @@
 # Test transformations for linear duality
 #
 
+from filecmp import cmp
 import os
 from os.path import abspath, dirname, normpath, join
 currdir = dirname(abspath(__file__))
-exdir = normpath(join(currdir,'..','..','..','examples','bilevel'))
+exdir = normpath(join(currdir, '..', '..', '..', 'examples', 'bilevel'))
 
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 
 from pyomo.common.dependencies import yaml, yaml_available, yaml_load_args
 import pyomo.opt
 import pyomo.scripting.pyomo_main as pyomo_main
 from pyomo.scripting.util import cleanup
-from pyomo.environ import *
-
-from six import iteritems
+import pyomo.environ
 
 solvers = pyomo.opt.check_available_solvers('cplex', 'glpk')
+
 
 class CommonTests:
 
@@ -37,7 +37,7 @@ class CommonTests:
         if self.solve:
             args = ['solve']
             if 'solver' in kwds:
-                _solver = kwds.get('solver','glpk')
+                _solver = kwds.get('solver', 'glpk')
                 args.append('--solver=bilevel_ld')
                 args.append('--solver-options="solver=%s"' % _solver)
             args.append('--save-results=result.yml')
@@ -45,7 +45,7 @@ class CommonTests:
         else:
             args = ['convert']
         if 'preprocess' in kwds:
-            #args.append('--solver=glpk')
+            # args.append('--solver=glpk')
             pp = kwds['preprocess']
             if pp == 'linear_dual':
                 args.append('--transform=bilevel.linear_dual')
@@ -55,8 +55,8 @@ class CommonTests:
         # which now causes a helpful error message.
         # I've manually inserted them into those tests that need them to pass
         # (which is where they also get used)
-        #args.append('--symbolic-solver-labels')
-        #args.append('--file-determinism=2')
+        # args.append('--symbolic-solver-labels')
+        # args.append('--file-determinism=2')
 
         if False:
             args.append('--stream-solver')
@@ -65,17 +65,20 @@ class CommonTests:
             args.append('--logging=debug')
 
         args = args + list(_args)
-        os.chdir(currdir)
+        _cwd = os.getcwd()
 
         print('***')
-        #print(' '.join(args))
+        # print(' '.join(args))
         try:
+            os.chdir(currdir)
             output = pyomo_main.main(args)
         except SystemExit:
             output = None
         except:
             output = None
             raise
+        finally:
+            os.chdir(_cwd)
         cleanup()
         print('***')
         return output
@@ -99,17 +102,17 @@ class CommonTests:
     def updateDocStrings(self):
         for key in dir(self):
             if key.startswith('test'):
-                getattr(self,key).__doc__ = " (%s)" % getattr(self,key).__name__
+                getattr(self, key).__doc__ = " (%s)" % getattr(self, key).__name__
 
     def test_t5(self):
-        self.problem='test_t5'
-        self.run_bilevel( join(exdir,'t5.py'))
-        self.check( 't5', 'linear_dual' )
+        self.problem = 'test_t5'
+        self.run_bilevel(join(exdir, 't5.py'))
+        self.check('t5', 'linear_dual')
 
     def test_t1(self):
-        self.problem='test_t1'
-        self.run_bilevel( join(exdir,'t1.py'))
-        self.check( 't1', 'linear_dual' )
+        self.problem = 'test_t1'
+        self.run_bilevel(join(exdir, 't1.py'))
+        self.check('t1', 'linear_dual')
 
     def Xtest_t2(self):
         self.problem='test_t2'
@@ -122,8 +125,8 @@ class Reformulate(unittest.TestCase, CommonTests):
     solve = False
 
     def tearDown(self):
-        if os.path.exists(os.path.join(currdir,'result.yml')):
-            os.remove(os.path.join(currdir,'result.yml'))
+        if os.path.exists(os.path.join(currdir, 'result.yml')):
+            os.remove(os.path.join(currdir, 'result.yml'))
 
     def run_bilevel(self,  *args, **kwds):
         args = list(args)
@@ -137,8 +140,10 @@ class Reformulate(unittest.TestCase, CommonTests):
         return join(currdir, problem+"_"+solver+'.lp')
 
     def check(self, problem, solver):
-        self.assertFileEqualsBaseline( join(currdir,self.problem+'_result.lp'),
-                                           self.referenceFile(problem,solver), tolerance=1e-5 )
+        _out = join(currdir,self.problem+'_result.lp')
+        _log = self.referenceFile(problem,solver)
+        self.assertTrue(cmp(_out, _log),
+                        msg="Files %s and %s differ" % (_log, _out))
 
 
 class Solver(unittest.TestCase):
@@ -153,7 +158,7 @@ class Solver(unittest.TestCase):
         self.assertEqual(len(refObj), len(ansObj))
         for i in range(len(refObj)):
             self.assertEqual(len(refObj[i]), len(ansObj[i]))
-            for key,val in iteritems(refObj[i]):
+            for key,val in refObj[i].items():
                 #self.assertEqual(val['Id'], ansObj[i].get(key,None)['Id'])
                 self.assertAlmostEqual(val['Value'], ansObj[i].get(key,None)['Value'], places=3)
 

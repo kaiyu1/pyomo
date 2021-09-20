@@ -1,10 +1,19 @@
-# -*- coding: UTF-8 -*-
+# -*- coding: utf-8 -*-
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
 """Tests infeasible model debugging utilities."""
 import logging
 
-from six import StringIO
+from io import StringIO
 
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 from pyomo.common.log import LoggingIntercept
 from pyomo.environ import ConcreteModel, Constraint, Var, inequality
 from pyomo.util.infeasible import (log_active_constraints, log_close_to_bounds,
@@ -61,7 +70,7 @@ class TestInfeasible(unittest.TestCase):
         m.x.setlb(2)
         m.x.setub(0)
         output = StringIO()
-        with LoggingIntercept(output, 'pyomo.util.infeasible', logging.INFO):
+        with LoggingIntercept(output, 'pyomo.util', logging.INFO):
             log_infeasible_bounds(m)
         expected_output = [
             "VAR x: 1 >/= LB 2", "VAR x: 1 </= UB 0", "VAR y4: 2 </= UB 1",
@@ -71,15 +80,20 @@ class TestInfeasible(unittest.TestCase):
     def test_log_active_constraints(self):
         """Test for logging of active constraints."""
         m = self.build_model()
+        depr = StringIO()
         output = StringIO()
-        with LoggingIntercept(output, 'pyomo.util.infeasible', logging.INFO):
+        with LoggingIntercept(depr, 'pyomo.util', logging.WARNING):
+            log_active_constraints(m)
+        self.assertIn("log_active_constraints is deprecated.", depr.getvalue())
+        with LoggingIntercept(output, 'pyomo.util', logging.INFO):
             log_active_constraints(m)
         expected_output = [
             "c1 active", "c2 active", "c3 active", "c4 active",
             "c5 active", "c6 active", "c7 active", "c8 active",
             "c9 active", "c11 active"
         ]
-        self.assertEqual(expected_output, output.getvalue().splitlines())
+        self.assertEqual(expected_output,
+                         output.getvalue()[len(depr.getvalue()):].splitlines())
 
     def test_log_close_to_bounds(self):
         """Test logging of variables and constraints near bounds."""

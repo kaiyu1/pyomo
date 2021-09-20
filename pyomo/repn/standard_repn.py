@@ -15,49 +15,31 @@ __all__ = ['StandardRepn', 'generate_standard_repn']
 
 import sys
 import logging
-import math
 import itertools
 
 from pyomo.core.base import (Constraint,
                              Objective,
                              ComponentMap)
 
-from pyutilib.misc import Bunch
-from pyutilib.math.util import isclose as isclose_default
-
 from pyomo.core.expr import current as EXPR
 from pyomo.core.base.objective import (_GeneralObjectiveData,
-                                       SimpleObjective)
+                                       ScalarObjective)
 from pyomo.core.base import _ExpressionData, Expression
-from pyomo.core.base.expression import SimpleExpression, _GeneralExpressionData
-from pyomo.core.base.var import (SimpleVar,
+from pyomo.core.base.expression import ScalarExpression, _GeneralExpressionData
+from pyomo.core.base.var import (ScalarVar,
                                  Var,
                                  _GeneralVarData,
-                                 _VarData,
                                  value)
-from pyomo.core.base.param import _ParamData
+from pyomo.core.base.param import ScalarParam, _ParamData
 from pyomo.core.base.numvalue import (NumericConstant,
-                                      native_numeric_types,
-                                      is_fixed)
-from pyomo.core.kernel.expression import IIdentityExpression, expression, noclone
-from pyomo.core.kernel.variable import IVariable
+                                      native_numeric_types)
+from pyomo.core.kernel.expression import expression, noclone
+from pyomo.core.kernel.variable import IVariable, variable
 from pyomo.core.kernel.objective import objective
 
-import six
-from six import iteritems
-from six import itervalues, iteritems, StringIO
-from six.moves import xrange, zip
-try:
-    basestring
-except:
-    basestring = str
+from io import StringIO
 
 logger = logging.getLogger('pyomo.core')
-
-using_py3 = six.PY3
-
-from pyomo.core.base import _VarData, _GeneralVarData, SimpleVar
-from pyomo.core.kernel.variable import IVariable, variable
 
 
 #
@@ -71,14 +53,7 @@ def isclose_const(a, b, rel_tol=1e-9, abs_tol=0.0):
             a = value(a)
         else:
             return False
-    # Copied from pyutilib.math.isclose
     return abs(a-b) <= max( rel_tol * max(abs(a), abs(b)), abs_tol )
-
-#
-# The global isclose() function used below.  This is either isclose_default
-# (defined in pyutilib) or isclose_const
-#
-isclose = isclose_default
 
 
 class StandardRepn(object):
@@ -260,14 +235,6 @@ def generate_standard_repn(expr, idMap=None, compute_values=True, verbose=False,
         Results = ResultsWithQuadratics
     else:
         Results = ResultsWithoutQuadratics
-    #
-    # Use a custom isclose function
-    #
-    global isclose
-    if compute_values:
-        isclose = isclose_default
-    else:
-        isclose = isclose_const
 
     if True:
         #
@@ -611,20 +578,23 @@ def _collect_prod(exp, multiplier, idMap, compute_values, verbose, quadratic):
     #
     if not lhs_nonl_None or not rhs_nonl_None:
         return Results(nonl=multiplier*exp)
+
+    # If the resulting expression has a polynomial degree greater than 2
+    # (1 if quadratic is False), then simply return this as a general
+    # nonlinear expression
     #
-    # If not collecting quadratic terms and both terms are linear, then simply return the nonlinear expression
-    #
-    if not quadratic and len(lhs.linear) > 0 and len(rhs.linear) > 0:
-        # NOTE: We treat a product of linear terms as nonlinear unless quadratic is True
+    if ( max(1 if lhs.linear else 0, 2 if quadratic and lhs.quadratic else 0) +
+         max(1 if rhs.linear else 0, 2 if quadratic and rhs.quadratic else 0)
+         > (2 if quadratic else 1) ):
         return Results(nonl=multiplier*exp)
 
     ans = Results()
     ans.constant = multiplier*lhs.constant * rhs.constant
     if not (lhs.constant.__class__ in native_numeric_types and lhs.constant == 0):
-        for key, coef in six.iteritems(rhs.linear):
+        for key, coef in rhs.linear.items():
             ans.linear[key] = multiplier*coef*lhs.constant
     if not (rhs.constant.__class__ in native_numeric_types and rhs.constant == 0):
-        for key, coef in six.iteritems(lhs.linear):
+        for key, coef in lhs.linear.items():
             if key in ans.linear:
                 ans.linear[key] += multiplier*coef*rhs.constant
             else:
@@ -632,26 +602,26 @@ def _collect_prod(exp, multiplier, idMap, compute_values, verbose, quadratic):
 
     if quadratic:
         if not (lhs.constant.__class__ in native_numeric_types and lhs.constant == 0):
-            for key, coef in six.iteritems(rhs.quadratic):
+            for key, coef in rhs.quadratic.items():
                 ans.quadratic[key] = multiplier*coef*lhs.constant
         if not (rhs.constant.__class__ in native_numeric_types and rhs.constant == 0):
-            for key, coef in six.iteritems(lhs.quadratic):
+            for key, coef in lhs.quadratic.items():
                 if key in ans.quadratic:
                     ans.quadratic[key] += multiplier*coef*rhs.constant
                 else:
                     ans.quadratic[key] = multiplier*coef*rhs.constant
-        for lkey, lcoef in six.iteritems(lhs.linear):
-            for rkey, rcoef in six.iteritems(rhs.linear):
+        for lkey, lcoef in lhs.linear.items():
+            for rkey, rcoef in rhs.linear.items():
                 ndx = (lkey, rkey) if lkey <= rkey else (rkey, lkey)
                 if ndx in ans.quadratic:
                     ans.quadratic[ndx] += multiplier*lcoef*rcoef
                 else:
                     ans.quadratic[ndx] = multiplier*lcoef*rcoef
         # TODO - Use quicksum here?
-        el_linear = multiplier*sum(coef*idMap[key] for key, coef in six.iteritems(lhs.linear))
-        er_linear = multiplier*sum(coef*idMap[key] for key, coef in six.iteritems(rhs.linear))
-        el_quadratic = multiplier*sum(coef*idMap[key[0]]*idMap[key[1]] for key, coef in six.iteritems(lhs.quadratic))
-        er_quadratic = multiplier*sum(coef*idMap[key[0]]*idMap[key[1]] for key, coef in six.iteritems(rhs.quadratic))
+        el_linear = multiplier*sum(coef*idMap[key] for key, coef in lhs.linear.items())
+        er_linear = multiplier*sum(coef*idMap[key] for key, coef in rhs.linear.items())
+        el_quadratic = multiplier*sum(coef*idMap[key[0]]*idMap[key[1]] for key, coef in lhs.quadratic.items())
+        er_quadratic = multiplier*sum(coef*idMap[key[0]]*idMap[key[1]] for key, coef in rhs.quadratic.items())
         ans.nonl += el_linear*er_quadratic + el_quadratic*er_linear
 
     return ans
@@ -929,25 +899,25 @@ _repn_collectors = {
     EXPR.EqualityExpression                     : _collect_comparison,
     EXPR.ExternalFunctionExpression             : _collect_external_fn,
     #_ConnectorData          : _collect_linear_connector,
-    #SimpleConnector         : _collect_linear_connector,
-    #param._ParamData        : _collect_linear_const,
-    #param.SimpleParam       : _collect_linear_const,
+    #ScalarConnector         : _collect_linear_connector,
+    _ParamData        : _collect_const,
+    ScalarParam       : _collect_const,
     #param.Param             : _collect_linear_const,
     #parameter               : _collect_linear_const,
     NumericConstant                             : _collect_const,
     _GeneralVarData                             : _collect_var,
-    SimpleVar                                   : _collect_var,
+    ScalarVar                                   : _collect_var,
     Var                                         : _collect_var,
     variable                                    : _collect_var,
     IVariable                                   : _collect_var,
     _GeneralExpressionData                      : _collect_identity,
-    SimpleExpression                            : _collect_identity,
+    ScalarExpression                            : _collect_identity,
     expression                                  : _collect_identity,
     noclone                                     : _collect_identity,
     _ExpressionData                             : _collect_identity,
     Expression                                  : _collect_identity,
     _GeneralObjectiveData                       : _collect_identity,
-    SimpleObjective                             : _collect_identity,
+    ScalarObjective                             : _collect_identity,
     objective                                   : _collect_identity,
     }
 
@@ -1327,24 +1297,24 @@ _linear_repn_collectors = {
     #EXPR.ExternalFunctionExpression             : _linear_collect_external_fn,
     ##EXPR.LinearSumExpression               : _collect_linear_sum,
     ##_ConnectorData          : _collect_linear_connector,
-    ##SimpleConnector         : _collect_linear_connector,
+    ##ScalarConnector         : _collect_linear_connector,
     ##param._ParamData        : _collect_linear_const,
-    ##param.SimpleParam       : _collect_linear_const,
+    ##param.ScalarParam       : _collect_linear_const,
     ##param.Param             : _collect_linear_const,
     ##parameter               : _collect_linear_const,
     _GeneralVarData                             : _linear_collect_var,
-    SimpleVar                                   : _linear_collect_var,
+    ScalarVar                                   : _linear_collect_var,
     Var                                         : _linear_collect_var,
     variable                                    : _linear_collect_var,
     IVariable                                   : _linear_collect_var,
     _GeneralExpressionData                      : _linear_collect_identity,
-    SimpleExpression                            : _linear_collect_identity,
+    ScalarExpression                            : _linear_collect_identity,
     expression                                  : _linear_collect_identity,
     noclone                                     : _linear_collect_identity,
     _ExpressionData                             : _linear_collect_identity,
     Expression                                  : _linear_collect_identity,
     _GeneralObjectiveData                       : _linear_collect_identity,
-    SimpleObjective                             : _linear_collect_identity,
+    ScalarObjective                             : _linear_collect_identity,
     objective                                   : _linear_collect_identity,
     }
 
@@ -1458,7 +1428,7 @@ def preprocess_constraint(block,
         block._repn = ComponentMap()
     block_repn = block._repn
 
-    for index, constraint_data in iteritems(constraint):
+    for index, constraint_data in constraint.items():
 
         if not constraint_data.active:
             continue

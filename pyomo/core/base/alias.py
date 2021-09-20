@@ -1,7 +1,17 @@
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
+
 import weakref
 import logging
-from copy import deepcopy
 
+from pyomo.common.log import is_debug_set
 from pyomo.common.timing import ConstructionTimer
 from pyomo.core.base.component import Component, ComponentData
 
@@ -79,14 +89,13 @@ class Alias(Component):
     #
 
     def construct(self, data=None):
-        if __debug__ and logger.isEnabledFor(logging.DEBUG):   #pragma:nocover
+        if is_debug_set(logger):   #pragma:nocover
             try:
                 name = str(self.name)
             except:
                 name = type(self)
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug("Constructing Alias, name=%s, "
-                                 "from data=%s", name, str(data))
+            logger.debug("Constructing Alias, name=%s, "
+                         "from data=%s", name, str(data))
         if self._constructed:
             return
         timer = ConstructionTimer(self)

@@ -10,7 +10,6 @@
 
 import os
 from os.path import join, dirname, abspath
-import warnings
 import types
 try:
     import new
@@ -18,7 +17,7 @@ try:
 except:
     new_available=False
 
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 from pyomo.opt import TerminationCondition
 from pyomo.solvers.tests.models.base import test_models
 from pyomo.solvers.tests.testcases import test_scenarios
@@ -29,7 +28,6 @@ thisDir = dirname(abspath( __file__ ))
 
 # Cleanup Expected Failure Results Files
 _cleanup_expected_failures = True
-
 
 #
 # A function that returns a function that gets
@@ -89,14 +87,16 @@ def create_test_method(model,
 
         if is_expected_failure:
             if rc[0]:
-                warnings.warn("\nTest model '%s' was marked as an expected "
-                              "failure but no failure occured. The "
-                              "reason given for the expected failure "
-                              "is:\n\n****\n%s\n****\n\n"
-                              "Please remove this case as an expected "
-                              "failure if the above issue has been "
-                              "corrected in the latest version of the "
-                              "solver." % (model_class.description, test_case.msg))
+                self.fail(
+                    "\nTest model '%s' was marked as an expected "
+                    "failure but no failure occured. The "
+                    "reason given for the expected failure "
+                    "is:\n\n****\n%s\n****\n\n"
+                    "Please remove this case as an expected "
+                    "failure if the above issue has been "
+                    "corrected in the latest version of the "
+                    "solver." % (model_class.description, test_case.msg)
+                )
             if _cleanup_expected_failures:
                 os.remove(save_filename)
 

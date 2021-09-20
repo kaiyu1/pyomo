@@ -2,8 +2,8 @@
 #
 #  Pyomo: Python Optimization Modeling Objects
 #  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
-#  Under the terms of Contract DE-NA0003525 with National Technology and 
-#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain 
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
 #  rights in this software.
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
@@ -14,16 +14,19 @@ import os
 import sys
 import time
 import logging
+import subprocess
+from io import StringIO
 
-import pyutilib.misc
-from pyutilib.common import ApplicationError, WindowsError
-from pyutilib.misc import Bunch
-from pyutilib.services import TempfileManager
-from pyutilib.subprocess import run
+from pyomo.common.backports import nullcontext
+from pyomo.common.errors import ApplicationError
+from pyomo.common.collections import Bunch
+from pyomo.common.log import is_debug_set, LoggingIntercept
+from pyomo.common.tempfiles import TempfileManager
+from pyomo.common.tee import TeeStream
 
 import pyomo.common
-from pyomo.opt.base import *
-from pyomo.opt.base.solvers import *
+from pyomo.opt.base import ResultsFormat
+from pyomo.opt.base.solvers import OptSolver
 from pyomo.opt.results import SolverStatus, SolverResults
 
 logger = logging.getLogger('pyomo.opt')
@@ -109,7 +112,11 @@ class SystemCallSolver(OptSolver):
         if not OptSolver.available(self,exception_flag):
             return False
         try:
-            ans = self.executable()
+            # HACK: Suppress logged warnings about the executable not
+            # being found
+            cm = nullcontext() if exception_flag else LoggingIntercept()
+            with cm:
+                ans = self.executable()
         except NotImplementedError:
             ans = None
         if ans is None:
@@ -227,7 +234,7 @@ class SystemCallSolver(OptSolver):
         #
         # Execute the command
         #
-        if __debug__ and logger.isEnabledFor(logging.DEBUG):
+        if is_debug_set(logger):
             logger.debug("Running %s", self._command.cmd)
 
         # display the log/solver file names prior to execution. this is useful
@@ -294,20 +301,36 @@ class SystemCallSolver(OptSolver):
 
         start_time = time.time()
 
+        if 'script' in command:
+            _input = command.script
+        else:
+            _input = None
+
+        timeout = self._timelimit
+        if timeout is not None:
+            timeout += max(1, 0.01*self._timelimit)
+
+        ostreams = [StringIO()]
+        if self._tee:
+            ostreams.append(sys.stdout)
+
         try:
-            if 'script' in command:
-                _input = command.script
-            else:
-                _input = None
-            [rc, log] = run(
-                command.cmd,
-                stdin = _input,
-                timelimit = self._timelimit if self._timelimit is None else self._timelimit + max(1, 0.01*self._timelimit),
-                env   = command.env,
-                tee   = self._tee,
-                define_signal_handlers = self._define_signal_handlers
-             )
-        except WindowsError:
+            with TeeStream(*ostreams) as t:
+                results = subprocess.run(
+                    command.cmd,
+                    input=_input,
+                    env=command.env,
+                    stdout=t.STDOUT,
+                    stderr=t.STDERR,
+                    timeout=timeout,
+                    universal_newlines=True,
+                )
+                t.STDOUT.flush()
+                t.STDERR.flush()
+
+            rc = results.returncode
+            log = ostreams[0].getvalue()
+        except OSError:
             err = sys.exc_info()[1]
             msg = 'Could not execute the command: %s\tError message: %s'
             raise ApplicationError(msg % (command.cmd, err))

@@ -12,31 +12,15 @@ from __future__ import division
 
 import inspect
 import logging
-import six
 from copy import deepcopy
 from collections import deque
 
-if six.PY2:
-    getargspec = inspect.getargspec
-else:
-    # For our needs, getfullargspec is a drop-in replacement for
-    # getargspec (which was removed in Python 3.x)
-    getargspec = inspect.getfullargspec
-
 logger = logging.getLogger('pyomo.core')
-
-from pyutilib.misc.visitor import SimpleVisitor, ValueVisitor
-from pyutilib.math.util import isclose
 
 from .symbol_map import SymbolMap
 from . import expr_common as common
 from .expr_errors import TemplateExpressionError
 from pyomo.common.deprecation import deprecation_warning
-
-from pyomo.core.expr.boolean_value import (
-    BooleanValue,)
-
-
 from pyomo.core.expr.numvalue import (
     nonpyomo_leaf_types,
     native_numeric_types,
@@ -182,13 +166,14 @@ class StreamBasedExpressionVisitor(object):
             fcn = getattr(self, name)
             if fcn is None:
                 continue
-            _args = getargspec(fcn)
+            _args = inspect.getfullargspec(fcn)
             _self_arg = 1 if inspect.ismethod(fcn) else 0
             if len(_args.args) == nargs + _self_arg and _args.varargs is None:
                 deprecation_warning(
                     "Note that the API for the StreamBasedExpressionVisitor "
                     "has changed to include the child index for the %s() "
-                    "method.  Please update your walker callbacks." % (name,))
+                    "method.  Please update your walker callbacks." % (name,),
+                    version='5.7.0')
                 def wrap(fcn, nargs):
                     def wrapper(*args):
                         return fcn(*args[:nargs])
@@ -560,7 +545,7 @@ class ExpressionValueVisitor(object):
         """
         flag, value = self.visiting_potential_leaf(node)
         if flag:
-            return value
+            return self.finalize(value)
         #_stack = [ (node, self.children(node), 0, len(self.children(node)), [])]
         _stack = [ (node, node._args_, 0, node.nargs(), [])]
         #
@@ -945,6 +930,9 @@ def sizeof_expression(expr):
 
 class _EvaluationVisitor(ExpressionValueVisitor):
 
+    def __init__(self, exception):
+        self.exception = exception
+
     def visit(self, node, values):
         """ Visit nodes that have been expanded """
         return node._apply_operation(values)
@@ -962,9 +950,9 @@ class _EvaluationVisitor(ExpressionValueVisitor):
             return False, None
 
         if node.is_numeric_type():
-            return True, value(node)
+            return True, value(node, exception=self.exception)
         elif node.is_logical_type():
-            return True, value(node)
+            return True, value(node, exception=self.exception)
         else:
             return True, node
 
@@ -1052,7 +1040,7 @@ def evaluate_expression(exp, exception=True, constant=False):
     if constant:
         visitor = _EvaluateConstantExpressionVisitor()
     else:
-        visitor = _EvaluationVisitor()
+        visitor = _EvaluationVisitor(exception=exception)
     try:
         return visitor.dfs_postorder_stack(exp)
 
@@ -1113,8 +1101,7 @@ def identify_components(expr, component_types):
     # in the expression.
     #
     visitor = _ComponentVisitor(component_types)
-    for v in visitor.xbfs_yield_leaves(expr):
-        yield v
+    yield from visitor.xbfs_yield_leaves(expr)
 
 
 # =====================================================
@@ -1168,8 +1155,7 @@ def identify_variables(expr, include_fixed=True):
     if include_fixed:
         for v in visitor.xbfs_yield_leaves(expr):
             if isinstance(v, tuple):
-                for v_i in v:
-                    yield v_i
+                yield from v
             else:
                 yield v
     else:
@@ -1197,7 +1183,8 @@ class _MutableParamVisitor(SimpleExpressionVisitor):
             return
 
         # TODO: Confirm that this has the right semantics
-        if not node.is_variable_type() and node.is_fixed():
+        if (not node.is_variable_type() and node.is_fixed()
+                and not node.is_constant()):
             if id(node) in self.seen:
                 return
             self.seen.add(id(node))
@@ -1216,8 +1203,7 @@ def identify_mutable_parameters(expr):
         Each mutable parameter that is found.
     """
     visitor = _MutableParamVisitor()
-    for v in visitor.xbfs_yield_leaves(expr):
-        yield v
+    yield from visitor.xbfs_yield_leaves(expr)
 
 
 # =====================================================

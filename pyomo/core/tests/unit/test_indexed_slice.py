@@ -11,12 +11,11 @@
 # Unit Tests for indexed components
 #
 
-import os
 import pickle
 
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 
-from pyomo.environ import *
+from pyomo.environ import Var, Block, ConcreteModel, RangeSet, Set
 from pyomo.core.base.block import _BlockData
 from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 
@@ -72,7 +71,7 @@ class TestComponentSlices(unittest.TestCase):
             ans, ['b[1,4].c[1,4]', 'b[1,4].c[2,4]', 'b[1,4].c[3,4]'] )
 
     def test_wildcard_slice(self):
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
             IndexError, 'Index .* contains an invalid number of '
             'entries for component .*'):
             _slicer = self.m.b[:]
@@ -143,17 +142,17 @@ class TestComponentSlices(unittest.TestCase):
             ans, [ 'b[1,4]',
                ] )
 
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
             IndexError, 'Index .* contains an invalid number of '
             'entries for component .*'):
             _slicer = self.m.b[1,2,3,...]
 
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
             IndexError, 'Index .* contains an invalid number of '
             'entries for component .*'):
             _slicer = self.m.b[1,:,2]
 
-        self.assertRaisesRegexp(
+        self.assertRaisesRegex(
             IndexError, 'wildcard slice .* can only appear once',
             self.m.b.__getitem__, (Ellipsis,Ellipsis) )
 
@@ -231,7 +230,7 @@ class TestComponentSlices(unittest.TestCase):
 
         # Test error on invalid attribute
         _slice = self.m.b[...].c[...].x[:]
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 AttributeError, ".*VarData' object has no attribute 'bogus'"):
             _slice.bogus = 0
         # but disabling the exception flag will run without error
@@ -257,7 +256,7 @@ class TestComponentSlices(unittest.TestCase):
         self.assertEqual(sum(list(1 if hasattr(x,'foo') else 0
                                   for x in self.m.b[:,:].c[:,:].x)), 0)
         # calling the iterator again will raise an exception
-        with self.assertRaisesRegexp(AttributeError, 'foo'):
+        with self.assertRaisesRegex(AttributeError, 'foo'):
             list(_slice)
         # but disabling the exception flag will run without error
         _slice.attribute_errors_generate_exceptions = False
@@ -281,9 +280,9 @@ class TestComponentSlices(unittest.TestCase):
         self.assertEqual(init_sum-sum(init_vals), new_sum)
 
         _slice = self.m.b[1,:].c[:,4].x
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 KeyError, "Index 'bogus' is not valid for indexed "
-                "component 'b\[1,4\]\.c\[1,4\]\.x'"):
+                r"component 'b\[1,4\]\.c\[1,4\]\.x'"):
             _slice['bogus'] = 0
         # but disabling the exception flag will run without error
         _slice.key_errors_generate_exceptions = False
@@ -334,9 +333,9 @@ class TestComponentSlices(unittest.TestCase):
         self.assertEqual(len(new_all), (3*3)*(3*3)*3 - 3*3*3)
 
         _slice = self.m.b[2,:].c[:,4].x
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 KeyError, "Index 'bogus' is not valid for indexed "
-                "component 'b\[2,4\]\.c\[1,4\]\.x'"):
+                r"component 'b\[2,4\]\.c\[1,4\]\.x'"):
             del _slice['bogus']
         # but disabling the exception flag will run without error
         _slice.key_errors_generate_exceptions = False
@@ -554,24 +553,24 @@ class TestComponentSlices(unittest.TestCase):
         for var in m.x[:]:
             self.assertIs(var, m.x)
 
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
             IndexError, 'Index .* contains an invalid number of '
             'entries for component .*'):
             _slicer = m.b[:]
 
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
             IndexError, 'Index .* contains an invalid number of '
             'entries for component .*'):
             _slicer = m.b[:, :, :]
 
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
             IndexError, 'Index .* contains an invalid number of '
             'entries for component .*'):
             _slicer = m.b[:,:,:,...]
 
         # valid slice for b, but not c
         _slicer = m.b[:,:,...].c[:,:,:].x
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
             IndexError, 'Index .* contains an invalid number of '
             'entries for component .*'):
             # Error not raised immediately because accessing c is deferred
@@ -580,7 +579,7 @@ class TestComponentSlices(unittest.TestCase):
 
         # valid slice for b, but not c
         _slicer = m.b[2, :].c[:].x
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
             IndexError, 'Index .* contains an invalid number of '
             'entries for component .*'):
             list(_slicer)
@@ -615,7 +614,7 @@ class TestComponentSlices(unittest.TestCase):
             self.assertEqual(len(ref), 2)
             self.assertIs(ref[0], m.x[1])
 
-            with self.assertRaisesRegexp(
+            with self.assertRaisesRegex(
                     IndexError, 'Index .* contains an invalid number of '
                     'entries for component .*'):
                 # If we are not flattening the sets, then
@@ -641,7 +640,7 @@ class TestComponentSlices(unittest.TestCase):
             m.b = Var(m.IJ, m.K)
             m.c = Var()
 
-            with self.assertRaisesRegexp(
+            with self.assertRaisesRegex(
                 IndexError, 'Index .* contains an invalid number of '
                 'entries for component .*'):
                 _slicer = m.a[(0,2),:]
@@ -650,7 +649,7 @@ class TestComponentSlices(unittest.TestCase):
             names = [ 'a[0,2,a]', 'a[0,2,b]', 'a[0,2,c]' ]
             self.assertEqual(names, [var.name for var in _slicer])
 
-            with self.assertRaisesRegexp(
+            with self.assertRaisesRegex(
                 IndexError, 'Index .* contains an invalid number of '
                 'entries for component .*'):
                 _slicer = m.b[0,2,:]
@@ -659,7 +658,7 @@ class TestComponentSlices(unittest.TestCase):
             names = [ 'b[(0,2),a]', 'b[(0,2),b]', 'b[(0,2),c]' ]
             self.assertEqual(names, [var.name for var in _slicer])
 
-            with self.assertRaisesRegexp(
+            with self.assertRaisesRegex(
                 IndexError, 'Index .* contains an invalid number of '
                 'entries for component .*'):
                 _slicer = m.b[:,2,'b']
@@ -679,6 +678,19 @@ class TestComponentSlices(unittest.TestCase):
 
         finally:
             normalize_index.flatten = _old_flatten
+
+    def test_compare_1dim_slice(self):
+        m = ConcreteModel()
+        m.I = Set(initialize=range(2))
+        m.J = Set(initialize=range(2,4))
+        m.K = Set(initialize=['a','b'])
+
+        @m.Block(m.I, m.J)
+        def b(b, i, j):
+            b.v = Var(m.K)
+
+        self.assertEqual(m.b[0,:].v[:], m.b[0,:].v[:])
+        self.assertNotEqual(m.b[0,:].v[:], m.b[0,:].v['a'])
 
 
 if __name__ == "__main__":

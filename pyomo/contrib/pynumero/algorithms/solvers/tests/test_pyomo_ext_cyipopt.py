@@ -9,12 +9,14 @@
 #  ___________________________________________________________________________
 
 import os
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 import pyomo.environ as pyo
 
 from pyomo.contrib.pynumero.dependencies import (
-    numpy as np, numpy_available, scipy_sparse as spa, scipy_available
+    numpy as np, numpy_available, scipy, scipy_available
 )
+from pyomo.common.dependencies.scipy import sparse as spa
+
 if not (numpy_available and scipy_available):
     raise unittest.SkipTest("Pynumero needs scipy and numpy to run NLP tests")
 
@@ -23,13 +25,15 @@ if not AmplInterface.available():
     raise unittest.SkipTest(
         "Pynumero needs the ASL extension to run CyIpoptSolver tests")
 
-try:
-    import ipopt
-except ImportError:
+from pyomo.contrib.pynumero.algorithms.solvers.cyipopt_solver import (
+    cyipopt_available
+)
+if not cyipopt_available:
     raise unittest.SkipTest("Pynumero needs cyipopt to run CyIpoptSolver tests")
 
 from pyomo.contrib.pynumero.algorithms.solvers.pyomo_ext_cyipopt import ExternalInputOutputModel, PyomoExternalCyIpoptProblem
 from pyomo.contrib.pynumero.algorithms.solvers.cyipopt_solver import CyIpoptSolver
+
 
 class PressureDropModel(ExternalInputOutputModel):
     def __init__(self):
@@ -55,6 +59,7 @@ class PressureDropModel(ExternalInputOutputModel):
                [1, -self._F**2, -self._F**2, -2*self._F*(self._c1 + self._c2)]]
         jac = np.asarray(jac, dtype=np.float64)
         return spa.coo_matrix(jac)
+
 
 class TestExternalInputOutputModel(unittest.TestCase):
 

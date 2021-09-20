@@ -12,8 +12,14 @@
 Script to generate the installer for pyomo.
 """
 
-import sys
 import os
+import platform
+import sys
+from setuptools import setup, find_packages, Command
+try:
+    from setuptools import DistutilsOptionError
+except ImportError:
+    from distutils.errors import DistutilsOptionError
 
 def read(*rnames):
     with open(os.path.join(os.path.dirname(__file__), *rnames)) as README:
@@ -36,10 +42,9 @@ def get_version():
         exec(_FILE.read(), _verInfo)
     return _verInfo['__version__']
 
-from setuptools import setup, find_packages
-
 CYTHON_REQUIRED = "required"
-if 'develop' in sys.argv:
+if not any(arg.startswith(cmd)
+           for cmd in ('build','install','bdist') for arg  in sys.argv):
     using_cython = False
 else:
     using_cython = "automatic"
@@ -53,7 +58,6 @@ if '--without-cython' in sys.argv:
 ext_modules = []
 if using_cython:
     try:
-        import platform
         if platform.python_implementation() != "CPython":
             # break out of this try-except (disable Cython)
             raise RuntimeError("Cython is only supported under CPython")
@@ -88,22 +92,73 @@ ERROR: Cython was explicitly requested with --with-cython, but cythonization
             raise
         using_cython = False
 
-def run_setup():
-   setup(name='Pyomo',
-      #
-      # Note: the release number is set in pyomo/version/info.py
-      #
-      version=get_version(),
-      maintainer='William E. Hart',
-      maintainer_email='wehart@sandia.gov',
-      url='http://pyomo.org',
-      license='BSD',
-      platforms=["any"],
-      description='Pyomo: Python Optimization Modeling Objects',
-      long_description=read('README.md'),
-      long_description_content_type='text/markdown',
-      keywords=['optimization'],
-      classifiers=[
+
+class DependenciesCommand(Command):
+    """Custom setuptools command
+
+    This will output the list of dependencies, including any optional
+    dependencies for 'extras_require` targets.  This is needed so that
+    we can (relatively) easily extract what `pip install '.[optional]'`
+    would have done so that we can pass it on to a 'conda install'
+    command when setting up Pyomo testing in a conda environment
+    (because conda for all intents does not acknowledge
+    `extras_require`).
+
+    """
+    description = "list the dependencies for this package"
+    user_options = [
+        ('extras=', None, 'extra targets to include'),
+    ]
+
+    def initialize_options(self):
+        self.extras = None
+
+    def finalize_options(self):
+        if self.extras is not None:
+            self.extras = [
+                e for e in (_.strip() for _ in self.extras.split(',')) if e
+            ]
+            for e in self.extras:
+                if e not in setup_kwargs['extras_require']:
+                    raise DistutilsOptionError(
+                        "extras can only include {%s}"
+                        % (', '.join(setup_kwargs['extras_require'])))
+
+    def run(self):
+        deps = list(self._print_deps(setup_kwargs['install_requires']))
+        if self.extras is not None:
+            for e in self.extras:
+                deps.extend(self._print_deps(setup_kwargs['extras_require'][e]))
+        print(' '.join(deps))
+
+    def _print_deps(self, deplist):
+        implementation_name = sys.implementation.name
+        platform_system = platform.system()
+        python_version = '.'.join(platform.python_version_tuple()[:2])
+        for entry in deplist:
+            dep, _, condition = (_.strip() for _ in entry.partition(';'))
+            if condition and not eval(condition):
+                continue
+            yield dep
+
+
+setup_kwargs = dict(
+    name = 'Pyomo',
+    #
+    # Note: the release number is set in pyomo/version/info.py
+    #
+    cmdclass = {'dependencies': DependenciesCommand},
+    version = get_version(),
+    maintainer = 'Pyomo Developer Team',
+    maintainer_email = 'pyomo-developers@googlegroups.com',
+    url = 'http://pyomo.org',
+    license = 'BSD',
+    platforms = ["any"],
+    description = 'Pyomo: Python Optimization Modeling Objects',
+    long_description = read('README.md'),
+    long_description_content_type = 'text/markdown',
+    keywords = ['optimization'],
+    classifiers = [
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: End Users/Desktop',
         'Intended Audience :: Science/Research',
@@ -113,71 +168,84 @@ def run_setup():
         'Operating System :: Microsoft :: Windows',
         'Operating System :: Unix',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: Implementation :: CPython',
-        'Programming Language :: Python :: Implementation :: Jython',
         'Programming Language :: Python :: Implementation :: PyPy',
         'Topic :: Scientific/Engineering :: Mathematics',
         'Topic :: Software Development :: Libraries :: Python Modules' ],
-      python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*',
-      install_requires=[
-          'PyUtilib>=6.0.1.dev0',
-          'enum34;python_version<"3.4"',
-          'ply',
-          'six>=1.4',
-      ],
-      packages=find_packages(exclude=("scripts",)),
-      package_data={"pyomo.contrib.viewer":["*.ui"]},
-      ext_modules = ext_modules,
-      entry_points="""
-        [console_scripts]
-        runbenders=pyomo.pysp.benders:Benders_main
-        evaluate_xhat=pyomo.pysp.evaluate_xhat:EvaluateXhat_main
-        runph=pyomo.pysp.phinit:PH_main
-        runef=pyomo.pysp.ef_writer_script:main
-        phsolverserver=pyomo.pysp.phsolverserver:main
-        scenariotreeserver=pyomo.pysp.scenariotree.server_pyro:main
-        computeconf=pyomo.pysp.computeconf:main
+    python_requires = '>=3.6',
+    install_requires = [
+        'ply',
+    ],
+    extras_require = {
+        'tests': [
+            'coverage',
+            'nose',
+            'parameterized',
+            'pybind11',
+        ],
+        'docs': [
+            'Sphinx>2',
+            'sphinx-copybutton',
+            'sphinx_rtd_theme>0.5',
+            'sphinxcontrib-jsmath',
+            'sphinxcontrib-napoleon',
+            'numpy', # Needed by autodoc for pynumero
+        ],
+        'optional': [
+            'dill',      # No direct use, but improves lambda pickle
+            'ipython',   # contrib.viewer
+            'matplotlib',
+            'networkx',  # network, incidence_analysis, community_detection
+            'numpy',
+            'openpyxl',  # dataportals
+            #'pathos',   # requested for #963, but PR currently closed
+            'pint',      # units
+            'python-louvain', # community_detection
+            'pyyaml',    # core
+            'sympy',     # differentiation
+            'xlrd',      # dataportals
+            'z3-solver', # community_detection
+            #
+            # subprocess output is merged more reliably if
+            # 'PeekNamedPipe' is available from pywin32
+            'pywin32; platform_system=="Windows"',
+            #
+            # The following optional dependencies are difficult to
+            # install on PyPy (binary wheels are not available), so we
+            # will only "require" them on other (CPython) platforms:
+            'casadi; implementation_name!="pypy"',  # dae
+            'numdifftools; implementation_name!="pypy"', # pynumero
+            'pandas; implementation_name!="pypy"',
+            'scipy; implementation_name!="pypy"',
+            'seaborn; implementation_name!="pypy"',   # parmest.graphics
+        ],
+    },
+    packages = find_packages(exclude=("scripts",)),
+    package_data = {
+        "pyomo.contrib.appsi.cmodel": ["src/*"],
+        "pyomo.contrib.mcpp": ["*.cpp"],
+        "pyomo.contrib.pynumero": ['src/*', 'src/tests/*'],
+        "pyomo.contrib.viewer": ["*.ui"],
+    },
+    ext_modules = ext_modules,
+    entry_points = """
+    [console_scripts]
+    pyomo = pyomo.scripting.pyomo_main:main_console_script
 
-        results_schema=pyomo.scripting.commands:results_schema
-        pyro_mip_server = pyomo.scripting.pyro_mip_server:main
-        test.pyomo = pyomo.scripting.runtests:runPyomoTests
-        pyomo = pyomo.scripting.pyomo_main:main_console_script
-        pyomo_ns = pyomo.scripting.commands:pyomo_ns
-        pyomo_nsc = pyomo.scripting.commands:pyomo_nsc
-        kill_pyro_mip_servers = pyomo.scripting.commands:kill_pyro_mip_servers
-        launch_pyro_mip_servers = pyomo.scripting.commands:launch_pyro_mip_servers
-        readsol = pyomo.scripting.commands:readsol
-        OSSolverService = pyomo.scripting.commands:OSSolverService
-        pyomo_python = pyomo.scripting.commands:pyomo_python
-        pyomo_old=pyomo.scripting.pyomo_command:main
+    [pyomo.command]
+    pyomo.help = pyomo.scripting.driver_help
+    pyomo.viewer=pyomo.contrib.viewer.pyomo_viewer
+    """
+)
 
-        [pyomo.command]
-        pyomo.runbenders=pyomo.pysp.benders
-        pyomo.evaluate_xhat=pyomo.pysp.evaluate_xhat
-        pyomo.runph=pyomo.pysp.phinit
-        pyomo.runef=pyomo.pysp.ef_writer_script
-        pyomo.phsolverserver=pyomo.pysp.phsolverserver
-        pyomo.scenariotreeserver=pyomo.pysp.scenariotree.server_pyro
-        pyomo.computeconf=pyomo.pysp.computeconf
-
-        pyomo.help = pyomo.scripting.driver_help
-        pyomo.test.pyomo = pyomo.scripting.runtests
-        pyomo.pyro_mip_server = pyomo.scripting.pyro_mip_server
-        pyomo.results_schema=pyomo.scripting.commands
-        pyomo.viewer=pyomo.contrib.viewer.pyomo_viewer
-      """
-      )
 
 try:
-    run_setup()
+    setup(**setup_kwargs)
 except SystemExit as e_info:
     # Cython can generate a SystemExit exception on Windows if the
     # environment is missing / has an incorrect Microsoft compiler.
@@ -197,8 +265,8 @@ ERROR: setup() failed:
     %s
 Re-running setup() without the Cython modules
 """ % (str(e_info),))
-        ext_modules = []
-        run_setup()
+        setup_kwargs['ext_modules'] = []
+        setup(**setup_kwargs)
         print("""
 WARNING: Installation completed successfully, but the attempt to cythonize
          core Pyomo modules failed.  Cython provides performance

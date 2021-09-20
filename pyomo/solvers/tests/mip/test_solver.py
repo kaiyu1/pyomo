@@ -12,28 +12,13 @@
 #
 
 import os
-from os.path import abspath, dirname
-pyomodir = dirname(abspath(__file__))+"/../.."
-currdir = dirname(abspath(__file__))+os.sep
 
-import pyutilib.th as unittest
-import pyutilib.services
-import pyutilib.common
+import pyomo.common.unittest as unittest
 
 import pyomo.opt
 import pyomo.solvers.plugins.solvers
 
-old_tempdir = None
-def setUpModule():
-    global old_tempdir
-    old_tempdir = pyutilib.services.TempfileManager.tempdir
-    pyutilib.services.TempfileManager.tempdir = currdir
-
-def tearDownModule():
-    pyutilib.services.TempfileManager.tempdir = old_tempdir
-
-
-class TestSolver2(pyomo.opt.OptSolver):
+class MockSolver2(pyomo.opt.OptSolver):
 
     def __init__(self, **kwds):
         kwds['type'] = 'stest_type'
@@ -46,11 +31,10 @@ class TestSolver2(pyomo.opt.OptSolver):
 class OptSolverDebug(unittest.TestCase):
 
     def setUp(self):
-        pyomo.opt.SolverFactory.register('stest2')(TestSolver2)
+        pyomo.opt.SolverFactory.register('stest2')(MockSolver2)
 
     def tearDown(self):
         pyomo.opt.SolverFactory.unregister('stest2')
-        pyutilib.services.TempfileManager.clear_tempfiles()
 
     def test_solver_init1(self):
         """
@@ -83,7 +67,6 @@ class OptSolverDebug(unittest.TestCase):
         ans = pyomo.opt.SolverFactory("stest2")
         # No exception should be generated
         ans.available()
-
 
 
 if __name__ == "__main__":

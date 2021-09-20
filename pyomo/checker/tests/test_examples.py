@@ -11,9 +11,9 @@
 import sys
 import os
 
-import pyutilib.th as unittest
+import pyomo.common.unittest as unittest
 
-from pyomo.checker import *
+from pyomo.checker import ModelCheckRunner
 from pyomo.checker.plugins.checker import PyomoModelChecker
 
 from pyomo.common.dependencies import yaml, yaml_available, yaml_load_args
@@ -24,7 +24,6 @@ exdir = os.path.join(currdir, "examples")
 def createTestMethod(defs, package, checkerName, key):
     def testMethod(obj, name):
         import pyomo.environ
-
         runner = ModelCheckRunner()
         path = os.path.join(exdir, package, "{0}_{1}.py".format(checkerName, key))
         runner.run(script = path, checkers = {package:[checkerName]})
