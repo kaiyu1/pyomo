@@ -20,12 +20,13 @@ else:
     subsolvers_available = True
 
 
-model_list = [EightProcessFlowsheet(convex=False),
-              Nonconvex1(),
-              Nonconvex2(),
-              Nonconvex3(),
-              Nonconvex4(),
-              ]
+# model_list = [EightProcessFlowsheet(convex=False),
+#               Nonconvex1(),
+#               Nonconvex2(),
+#               Nonconvex3(),
+#               Nonconvex4(),
+#               ]
+model_list = [Nonconvex1()]
 
 
 @unittest.skipIf(not subsolvers_available,
