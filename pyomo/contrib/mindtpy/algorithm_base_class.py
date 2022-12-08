@@ -1563,9 +1563,11 @@ class _MindtPyAlgorithm(object):
         try:
             with time_code(self.timing, 'regularization main' if regularization_problem else ('fp main' if fp else 'main')):
                 main_mip_results = mainopt.solve(self.mip,
-                                                tee=config.mip_solver_tee, 
+                                                # tee=config.mip_solver_tee, 
+                                                tee = True,
                                                 load_solutions=False,
                                                 **mip_args)
+                self.mip.display()  #!!!!!!
                 # update_attributes should be before load_from(main_mip_results), since load_from(main_mip_results) may fail.
                 if config.single_tree or config.use_tabu_list:
                     self.update_attributes()
