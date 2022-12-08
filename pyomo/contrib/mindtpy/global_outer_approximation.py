@@ -159,7 +159,7 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
                 self.results.solver.num_nodes = self.nlp_iter - \
                     (1 if config.init_strategy == 'rNLP' else 0)
 
-        return self.results
+        return self.results, self.solverresults #!!!!!!!!
 
 
     def MindtPy_iteration_loop(self, config):
@@ -184,6 +184,7 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
             self.mip_subiter = 0
             # solve MILP main problem
             main_mip, main_mip_results = self.solve_main(config)
+            self.solverresults = main_mip_results   #!!!!!!
             if main_mip_results is not None:
                 if not config.single_tree:
                     if main_mip_results.solver.termination_condition is tc.optimal:
