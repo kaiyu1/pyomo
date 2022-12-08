@@ -41,36 +41,37 @@ class TestMindtPy(unittest.TestCase):
         for var in model.optimal_solution:
             self.assertAlmostEqual(var.value, model.optimal_solution[var], places=places)
 
-    def test_GOA(self):
-        """Test the global outer approximation decomposition algorithm."""
-        with SolverFactory('mindtpy') as opt:
-            for model in model_list:
-                results = opt.solve(model, strategy='GOA',
-                                    mip_solver=required_solvers[1],
-                                    nlp_solver=required_solvers[0],
-                                    single_tree=True)
+    # def test_GOA(self):
+    #     """Test the global outer approximation decomposition algorithm."""
+    #     with SolverFactory('mindtpy') as opt:
+    #         for model in model_list:
+    #             results = opt.solve(model, strategy='GOA',
+    #                                 mip_solver=required_solvers[1],
+    #                                 nlp_solver=required_solvers[0],
+    #                                 single_tree=True,
+    #                                 tee = True)
 
-                self.assertIn(results.solver.termination_condition, [
-                    TerminationCondition.optimal, TerminationCondition.feasible])
-                self.assertAlmostEqual(
-                    value(model.objective.expr), model.optimal_value, places=2)
-                self.check_optimal_solution(model)
+    #             self.assertIn(results.solver.termination_condition, [
+    #                 TerminationCondition.optimal, TerminationCondition.feasible])
+    #             self.assertAlmostEqual(
+    #                 value(model.objective.expr), model.optimal_value, places=2)
+    #             self.check_optimal_solution(model)
 
-    def test_GOA_tabu_list(self):
-        """Test the global outer approximation decomposition algorithm."""
-        with SolverFactory('mindtpy') as opt:
-            for model in model_list:
-                results = opt.solve(model, strategy='GOA',
-                                    mip_solver=required_solvers[1],
-                                    nlp_solver=required_solvers[0],
-                                    single_tree=True,
-                                    use_tabu_list=True)
+    # def test_GOA_tabu_list(self):
+    #     """Test the global outer approximation decomposition algorithm."""
+    #     with SolverFactory('mindtpy') as opt:
+    #         for model in model_list:
+    #             results = opt.solve(model, strategy='GOA',
+    #                                 mip_solver=required_solvers[1],
+    #                                 nlp_solver=required_solvers[0],
+    #                                 single_tree=True,
+    #                                 use_tabu_list=True)
 
-                self.assertIn(results.solver.termination_condition, [
-                    TerminationCondition.optimal, TerminationCondition.feasible])
-                self.assertAlmostEqual(
-                    value(model.objective.expr), model.optimal_value, places=2)
-                self.check_optimal_solution(model)
+    #             self.assertIn(results.solver.termination_condition, [
+    #                 TerminationCondition.optimal, TerminationCondition.feasible])
+    #             self.assertAlmostEqual(
+    #                 value(model.objective.expr), model.optimal_value, places=2)
+    #             self.check_optimal_solution(model)
 
     @unittest.skipUnless(SolverFactory('gurobi_persistent').available(),
                          'gurobi_persistent solver is not available')
@@ -81,7 +82,8 @@ class TestMindtPy(unittest.TestCase):
                 results = opt.solve(model, strategy='GOA',
                                     mip_solver='gurobi_persistent',
                                     nlp_solver=required_solvers[0],
-                                    single_tree=True)
+                                    single_tree=True,
+                                    tee = True)
 
                 self.assertIn(results.solver.termination_condition, [
                     TerminationCondition.optimal, TerminationCondition.feasible])
