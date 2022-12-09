@@ -296,7 +296,10 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
         config.add_slack = False
         config.use_mcpp = True
         config.equality_relaxation = False
-        config.use_fbbt = True
+
+        config.use_fbbt = False   
+        config.use_baron_convexification = True
+
         # add_no_good_cuts is Ture by default in GOA
         if not config.add_no_good_cuts and not config.use_tabu_list:
             config.add_no_good_cuts = True
@@ -315,8 +318,6 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
                 config.threads = 1
                 config.logger.info(
                     'The threads parameter is corrected to 1 since lazy constraint callback conflicts with multi-threads mode.')
-        
-        config.use_baron_convexification = True
 
         super().check_config()
 

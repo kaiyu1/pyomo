@@ -83,7 +83,9 @@ class TestMindtPy(unittest.TestCase):
                                     mip_solver='gurobi_persistent',
                                     nlp_solver=required_solvers[0],
                                     single_tree=True,
-                                    tee = True)
+                                    tee = True,
+                                    use_baron_convexification = True)
+
 
                 self.assertIn(results.solver.termination_condition, [
                     TerminationCondition.optimal, TerminationCondition.feasible])
