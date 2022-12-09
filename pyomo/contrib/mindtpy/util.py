@@ -981,8 +981,9 @@ def add_baron_cuts(model):
     os.system("sed -i '1 a prlevel:0; ' root_relaxation_baron.bar")
     os.system("sed -i '1 a ppdo:0; ' root_relaxation_baron.bar")
     os.system("sed -i '1 a pscdo:0; ' root_relaxation_baron.bar")
-    os.system('''sed -i '1 a CplexLibName: "/package/cplex/22.1/cplex/bin/x86-64_linux/libcplex2210.so"; ' root_relaxation_baron.bar''')
-    
+    # os.system('''sed -i '1 a CplexLibName: "/package/cplex/22.1/cplex/bin/x86-64_linux/libcplex2210.so"; ' root_relaxation_baron.bar''')
+    os.system('''sed -i '1 a CplexLibName: "/package/cplex/CPLEX_Studio129/cplex/bin/x86-64_linux/libcplex1290.so"; ' root_relaxation_baron.bar''')
+
     os.system(special_baron_path + " root_relaxation_baron.bar")
     
     cplex_model = cplex.Cplex("relax.lp")
