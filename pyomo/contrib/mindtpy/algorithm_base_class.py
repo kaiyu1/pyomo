@@ -49,6 +49,7 @@ from pyomo.contrib.mindtpy.util import generate_norm1_objective_function, genera
 from pyomo.contrib.mindtpy.util import calc_jacobians, MindtPySolveData
 from pyomo.core import Constraint, Expression, Objective, minimize, value
 from pyomo.util.vars_from_expressions import get_vars_from_components
+from pyomo.contrib.mindtpy.util import add_baron_cuts
 
 single_tree, single_tree_available = attempt_import(
     'pyomo.contrib.mindtpy.single_tree')
@@ -627,11 +628,20 @@ class _MindtPyAlgorithm(object):
         if obj.expr.polynomial_degree() == 0:
             config.use_dual_bound = False
 
+        self.initial_model = model
+
         if config.use_fbbt:
             fbbt(model)
             # TODO: logging_level is not logging.INFO here
             config.logger.info(
                 'Use the fbbt to tighten the bounds of variables')
+        
+        if config.use_baron_convexification:
+            add_baron_cuts(model)
+            # TODO: logging_level is not logging.INFO here
+            config.logger.info(
+                'Use the baron to tighten the bounds of variables')
+
 
         self.original_model = model
         self.working_model = model.clone()

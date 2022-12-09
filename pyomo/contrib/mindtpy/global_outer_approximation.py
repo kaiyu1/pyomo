@@ -315,6 +315,8 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
                 config.threads = 1
                 config.logger.info(
                     'The threads parameter is corrected to 1 since lazy constraint callback conflicts with multi-threads mode.')
+        
+        config.use_baron_convexification = True
 
         super().check_config()
 

@@ -362,6 +362,11 @@ def _add_common_configs(CONFIG):
         description='Whether to add lazy cuts to the main problem at the incumbent solution found in the branch & bound tree',
         domain=bool
     ))
+    CONFIG.declare("use_baron_convexification", ConfigValue(
+        default=False,
+        description='use baron to provide the convex relations for nonconvex MINLPs.',
+        domain=bool
+    ))
 
 
 def _add_subsolver_configs(CONFIG):
